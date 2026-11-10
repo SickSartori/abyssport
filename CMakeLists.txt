@@ -63,6 +63,15 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL3)
 
+# FFmpeg (LGPL 2.1 or later, this build of it): the H.264 decoder behind the game's films. A ready-made build for
+# Windows with shared libraries, downloaded at configure time, pinned by release and hash; only libavcodec and
+# libavutil are used, and their DLLs are copied beside the program.
+FetchContent_Declare(ffmpeg
+    URL https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n8.1.3-27-g8dca1586f4-win64-lgpl-shared-8.1.zip
+    URL_HASH SHA256=5cef7bc48e513f3cee7c881e8b2999d835541edb1846c3e89443a67f8f8556ab
+)
+FetchContent_MakeAvailable(ffmpeg)
+
 # Dear ImGui (MIT, third_party/imgui): the in-game overlay's interface, drawn through SDL's GPU API.
 add_library(imgui STATIC
     third_party/imgui/imgui.cpp
@@ -150,7 +159,16 @@ target_compile_definitions(abyss PRIVATE _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO
 # The settings the game plays with, as Project Nativ's pack for it sets them (packs/PCSA00029/pack.toml RUN_ENV).
 set_source_files_properties(src/core/main.c PROPERTIES COMPILE_DEFINITIONS
     "RECOMP_BUILTIN_ENV=\"RECOMP_GAME_OPTIONS=fov,view_distance RECOMP_SRGB=1 RECOMP_ASPECT_HOOK=1 RECOMP_HUD_DRAWS=2d RECOMP_TARGET_SCALE=720x408:1.3333 RECOMP_CAMERA_LAMP=1 RECOMP_FSR_SUPPORTED=1\"")
-target_link_libraries(abyss PRIVATE abyssgame atrac9 imgui zlibstatic SDL3::SDL3-static bcrypt)
+target_link_libraries(abyss PRIVATE abyssgame atrac9 imgui zlibstatic SDL3::SDL3-static bcrypt
+    "${ffmpeg_SOURCE_DIR}/lib/avcodec.lib" "${ffmpeg_SOURCE_DIR}/lib/avutil.lib")
+# The films: sceAvcdec through libavcodec (src/media/video.c).
+target_include_directories(abyss PRIVATE "${ffmpeg_SOURCE_DIR}/include")
+set_source_files_properties(src/media/video.c PROPERTIES COMPILE_DEFINITIONS RECOMP_AVCODEC)
+file(GLOB ABYSS_FFMPEG_DLLS "${ffmpeg_SOURCE_DIR}/bin/avcodec-*.dll" "${ffmpeg_SOURCE_DIR}/bin/avutil-*.dll"
+                            "${ffmpeg_SOURCE_DIR}/bin/swresample-*.dll")
+add_custom_command(TARGET abyss POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ABYSS_FFMPEG_DLLS} "$<TARGET_FILE_DIR:abyss>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ffmpeg_SOURCE_DIR}/LICENSE.txt" "$<TARGET_FILE_DIR:abyss>/FFmpeg-LICENSE.txt")
 
 # The check: the game starts and draws its first frames -- headless, on the software renderer, which is the reference
 # (81009ffc: module_start of 1.00). About a minute: the game loads its front end first.

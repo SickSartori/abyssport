@@ -33,3 +33,10 @@ Pinned by version and hash, linked statically.
 |---|---|---|---|
 | [SDL](https://libsdl.org) | 3.4.20 | zlib | The window, the GPU API the renderer draws through, audio output, controllers |
 | [zlib](https://zlib.net) | 1.3.1 | zlib | The game's archives (PSARC) are deflated |
+
+FFmpeg is not linked in: its libraries are used as they are built, as DLLs beside the program, with its licence
+(`FFmpeg-LICENSE.txt`).
+
+| Software | Version | Licence | Use |
+|---|---|---|---|
+| [FFmpeg](https://ffmpeg.org): libavcodec, libavutil and libswresample, from [BtbN's builds](https://github.com/BtbN/FFmpeg-Builds) (`win64-lgpl-shared`, 31 October 2026) | 8.1.3 | LGPL 2.1 or later | The H.264 decoder behind the game's films |

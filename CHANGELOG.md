@@ -24,8 +24,4 @@
 - `tools/make_game.py`: the game's code and data made from your own copy and the firmware update file, in one step.
 - `docs/controls.md`: how the console's sticks, touch screen, rear pad and gyroscope are played with a keyboard, a
   mouse or a controller.
-
-### Known problems
-
-- The intro movie and the other MP4 films do not play (no H.264 decoder in the build yet): `play.cmd` makes the
-  game skip them.
+- The game's films play: H.264 through FFmpeg's libavcodec, whose DLLs sit beside the program.

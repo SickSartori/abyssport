@@ -26,6 +26,7 @@ int pthread_once(pthread_once_t *once, void (*fn)(void));
 #define PTHREAD_MUTEX_INITIALIZER {0}
 #define PTHREAD_COND_INITIALIZER {0}
 int pthread_mutex_init(pthread_mutex_t *m, const pthread_mutexattr_t *attr);
+int pthread_mutex_destroy(pthread_mutex_t *m);
 int pthread_mutex_lock(pthread_mutex_t *m);
 int pthread_mutex_trylock(pthread_mutex_t *m);   /* 0 when taken */
 int pthread_mutex_unlock(pthread_mutex_t *m);
