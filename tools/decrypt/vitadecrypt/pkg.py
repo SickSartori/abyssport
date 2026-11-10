@@ -28,6 +28,7 @@ from Crypto.Util import Counter
 from . import keys as K
 from . import sfo as SFO
 from . import rif as RIF
+from .safepath import inside
 
 _HEADER = struct.Struct(
     ">IHHIIIIQQQ48s16s16s64s"
@@ -176,7 +177,7 @@ def extract_pkg(pkg_path: str, out_dir: str, *, rif_path: str | None = None) -> 
         if not name or name in (".", "..") or name.startswith("/") or ".." in name.split("/"):
             raise PkgError(f"entry {i}: unsafe/garbage name {name!r} -- wrong key?")
 
-        dest = os.path.join(out_dir, *name.split("/"))
+        dest = inside(out_dir, name)
         if (f_type & 0xFF) in ENTRY_TYPE_DIR:
             os.makedirs(dest, exist_ok=True)
             continue

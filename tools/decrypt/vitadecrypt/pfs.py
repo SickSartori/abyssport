@@ -43,6 +43,7 @@ import os
 import struct
 
 from Crypto.Cipher import AES
+from .safepath import inside
 
 # ---------------------------------------------------------------------------
 # Fixed key material (psvpfsparser/PfsKeys.cpp, F00DNativeKeyEncryptor.cpp)
@@ -631,11 +632,11 @@ def decrypt_pfs_tree(root: str, klicensee: bytes, out_dir: str) -> PfsDecryptRes
 
     n_dec = n_copy = n_empty = n_dirs = 0
     for d in dirs:
-        os.makedirs(os.path.join(out_dir, d.path), exist_ok=True)
+        os.makedirs(inside(out_dir, d.path), exist_ok=True)
         n_dirs += 1
 
     for entry in files:
-        dest = os.path.join(out_dir, entry.path)
+        dest = inside(out_dir, entry.path)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if entry.size == 0:
             # Empty files never get a unicv.db table at all (bruteforce_map only

@@ -37,6 +37,7 @@ import dataclasses
 import os
 import struct
 import sys
+from .safepath import inside
 
 # First 36 bytes of the BIOS Parameter Block (BPB); the rest of the 512-byte
 # boot sector (bootstrap code, 0x55AA signature) isn't needed for reading.
@@ -232,7 +233,7 @@ class FAT16Image:
         Returns the number of files written."""
         n = 0
         for rel, entry in self.walk():
-            dest = os.path.join(out_dir, *rel.split("/"))
+            dest = inside(out_dir, rel)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, "wb") as f:
                 f.write(self.read_file(entry))
