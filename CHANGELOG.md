@@ -19,3 +19,13 @@
 - The rest of the runtime: the renderers (software and GPU, through SDL3), the shader translator, audio (NGS, ATRAC9),
   touch, motion and controllers, the window and the in-game overlay, and Project Nativ's patches for the game.
   The game draws its title screen. `play.cmd` starts it from the build tree.
+- A new campaign starts and the prologue plays: the in-engine cutscene, then the first tutorial.
+- The shader recipes for the game (`res/shaders.txt`), so its shaders are built as it starts.
+- `tools/make_game.py`: the game's code and data made from your own copy and the firmware update file, in one step.
+- `docs/controls.md`: how the console's sticks, touch screen, rear pad and gyroscope are played with a keyboard, a
+  mouse or a controller.
+
+### Known problems
+
+- The intro movie and the other MP4 films do not play (no H.264 decoder in the build yet): `play.cmd` makes the
+  game skip them.
