@@ -19,24 +19,35 @@ endif()
 
 # The game's code, recompiled from the player's own copy: never in the repository (game/ is ignored).
 set(ABYSS_RECOMP_DIR "${CMAKE_SOURCE_DIR}/game/library/decrypted/PCSA00029/recomp" CACHE PATH
-    "The recompiler's output for PCSA00029 1.00: game.c, game.h and game_part*.c")
-# shortcut: rt.h is read from the ignored Nativ checkout; adapt it into src/ (with its THIRD_PARTY.md row) once
-# the list of what abyssport takes from Nativ is settled.
-set(ABYSS_RT_DIR "${CMAKE_SOURCE_DIR}/external/nativ/recompiler" CACHE PATH
-    "The folder with rt.h, the header the recompiled code includes")
-
-file(GLOB ABYSS_GAME_SOURCES CONFIGURE_DEPENDS "${ABYSS_RECOMP_DIR}/game.c" "${ABYSS_RECOMP_DIR}/game_part*.c")
-if(NOT ABYSS_GAME_SOURCES OR NOT EXISTS "${ABYSS_RT_DIR}/rt.h")
-    message(FATAL_ERROR "The game's recompiled code is missing: no game.c in ${ABYSS_RECOMP_DIR}, or no rt.h in "
-                        "${ABYSS_RT_DIR}. It is made from your own copy of the game; set ABYSS_RECOMP_DIR and "
-                        "ABYSS_RT_DIR if it is somewhere else.")
+    "The recompiler's output for PCSA00029 1.00: game*.c, the libraries' mod_*.c, and their .img memory images")
+file(GLOB ABYSS_GAME_SOURCES CONFIGURE_DEPENDS "${ABYSS_RECOMP_DIR}/game.c" "${ABYSS_RECOMP_DIR}/game_part*.c"
+                                               "${ABYSS_RECOMP_DIR}/mod_*.c")
+if(NOT ABYSS_GAME_SOURCES)
+    message(FATAL_ERROR "The game's recompiled code is missing: no game.c in ${ABYSS_RECOMP_DIR}. It is made from "
+                        "your own copy of the game; set ABYSS_RECOMP_DIR if it is somewhere else.")
 endif()
 
 # The game: 32,000 functions of ARM code as C, 425 MB of it. Built by clang-cl (the "C++ Clang tools" component of
 # Visual Studio): the code uses GNU C (statement expressions, __atomic_*, __thread), and MSVC's optimiser does not
-# finish a single one of its files in an hour and a half where Clang takes 20 seconds.
-add_library(abyssgame STATIC ${ABYSS_GAME_SOURCES})
+# finish a single one of its files in an hour and a half where Clang takes 20 seconds. With it, Sony's libraries the
+# game ships (libc, libfios2), recompiled the same way. An object library: each library registers its tables from a
+# constructor nothing refers to, which a static library would leave out of the program.
+add_library(abyssgame OBJECT ${ABYSS_GAME_SOURCES})
 set_target_properties(abyssgame PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
-target_include_directories(abyssgame PRIVATE "${ABYSS_RT_DIR}")
+target_include_directories(abyssgame PUBLIC src/recomp)
 # No fused multiply-adds: the Vita's VFP rounds the product before it adds (rt.h). No warnings: generated code.
 target_compile_options(abyssgame PRIVATE /clang:-ffp-contract=off -w /MP)
+
+# The program: the host of the recompiled code. Built by clang-cl too: it shares rt.h with the game's code.
+add_executable(abyss
+    src/game/hooks.c
+    src/host/main.c
+)
+set_target_properties(abyss PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
+target_link_libraries(abyss PRIVATE abyssgame)
+target_compile_definitions(abyss PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+# The first check: the libraries load and Sony's libc makes its first system call (81009ffc: module_start of 1.00).
+enable_testing()
+add_test(NAME abyss_boots COMMAND abyss "${ABYSS_RECOMP_DIR}/game.img" 81009ffc 1)
+set_tests_properties(abyss_boots PROPERTIES PASS_REGULAR_EXPRESSION "#1 sceKernelGetProcessParam")
