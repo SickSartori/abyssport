@@ -8,6 +8,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <time.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* a mutex is an SRWLOCK, with its owner and depth when it is recursive; a condition is a CONDITION_VARIABLE.
  * All zero when new. A recursive mutex can't be waited on with a condition. */
@@ -33,7 +36,7 @@ int pthread_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m, const struct t
 int pthread_cond_signal(pthread_cond_t *c);
 int pthread_cond_broadcast(pthread_cond_t *c);
 
-typedef void *pthread_t;   /* the thread's handle */
+typedef uintptr_t pthread_t;   /* the thread id */
 typedef struct { size_t stack; int detached; } pthread_attr_t;
 #define PTHREAD_CREATE_DETACHED 1
 int pthread_attr_init(pthread_attr_t *a);
@@ -42,7 +45,9 @@ int pthread_attr_setdetachstate(pthread_attr_t *a, int state);
 int pthread_create(pthread_t *t, const pthread_attr_t *a, void *(*fn)(void *), void *arg);
 int pthread_detach(pthread_t t);
 int pthread_join(pthread_t t, void **result);    /* (the result is not kept: 0) */
-pthread_t pthread_self(void);                    /* for pthread_setname_np only: not comparable */
+pthread_t pthread_self(void);
+int pthread_equal(pthread_t a, pthread_t b);
+int pthread_getname_np(pthread_t t, char *buf, size_t n);
 int pthread_setname_np(pthread_t t, const char *name);
 _Noreturn void pthread_exit(void *result);
 
@@ -52,4 +57,7 @@ int clock_gettime(int clock, struct timespec *t);
 int nanosleep(const struct timespec *t, struct timespec *left);   /* never interrupted: 0 */
 struct tm *localtime_r(const time_t *t, struct tm *out);
 struct tm *gmtime_r(const time_t *t, struct tm *out);
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -8,10 +8,14 @@
  */
 #ifndef ABYSS_POSIX_COMPAT_H
 #define ABYSS_POSIX_COMPAT_H
+#define _USE_MATH_DEFINES                 /* (M_PI) */
+#define WIN32_LEAN_AND_MEAN                /* (a file that includes <windows.h>: without winsock, whose timeval is ours) */
 #include <direct.h>
 #include <fcntl.h>
 #include <io.h>
 #include <limits.h>
+#include <process.h>
+#include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +23,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <pthread.h>                        /* (posix/: clock_gettime and nanosleep with it) */
+#include <strings.h>                        /* (posix/: strcasecmp) */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef intptr_t ssize_t;
 #define off_t long long
@@ -36,8 +45,13 @@ typedef intptr_t ssize_t;
 #define mkdir(path, mode) _mkdir(path)     /* (no permission bits on Windows) */
 #define timegm _mkgmtime
 #define fsync(fd) _commit(fd)
+#define ftello _ftelli64
+#define fseeko _fseeki64
 #define sync() ((void)0)                   /* (the Vita's flush-everything: nothing to do here) */
 #define random() rand()
+#define getpid _getpid
+/* the guest longjmp (the host): POSIX _longjmp is a plain jump */
+#define _longjmp(buf, v) longjmp((buf), (v))
 /* rename onto an existing file: POSIX replaces it (every "write a temporary, rename it over" save relies on that) */
 #define rename(from, to) posix_rename((from), (to))
 int posix_rename(const char *from, const char *to);
@@ -47,4 +61,7 @@ char *realpath(const char *path, char *resolved);           /* an existing path,
 int truncate(const char *path, off_t size);
 #include <sys/time.h>                                       /* (posix/sys/time.h: struct timeval) */
 int utimes(const char *path, const struct timeval tv[2]);   /* access and modification times, whole seconds */
+#ifdef __cplusplus
+}
+#endif
 #endif

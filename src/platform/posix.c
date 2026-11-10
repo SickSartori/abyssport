@@ -19,6 +19,7 @@
 #include "posix/pthread.h"
 #include "posix/unistd.h"
 #include "posix/dirent.h"
+#include "posix/sched.h"
 #include "posix/sys/time.h"
 
 _Static_assert(sizeof(void *) == sizeof(SRWLOCK) && sizeof(pthread_cond_t) == sizeof(CONDITION_VARIABLE) && sizeof(pthread_once_t) == sizeof(INIT_ONCE), "posix/pthread.h");
@@ -63,27 +64,63 @@ int pthread_cond_broadcast(pthread_cond_t *c) { WakeAllConditionVariable((CONDIT
 int pthread_attr_init(pthread_attr_t *a) { a->stack = 0; a->detached = 0; return 0; }
 int pthread_attr_setstacksize(pthread_attr_t *a, size_t bytes) { a->stack = bytes; return 0; }
 int pthread_attr_setdetachstate(pthread_attr_t *a, int state) { a->detached = state; return 0; }
+/* a thread is known by its id; the handles of the joinable ones are kept until pthread_join or pthread_detach */
 typedef struct { void *(*fn)(void *); void *arg; } Start;
 static unsigned __stdcall thread_start(void *p) { Start s = *(Start *)p; free(p); s.fn(s.arg); return 0; }
+static struct { unsigned id; HANDLE h; } joinable[1024];
+static SRWLOCK joinable_lock = SRWLOCK_INIT;
+static HANDLE joinable_take(pthread_t t) {
+	HANDLE h = 0;
+	AcquireSRWLockExclusive(&joinable_lock);
+	for (int i = 0; i < 1024 && !h; i++) if (joinable[i].h && joinable[i].id == (unsigned)t) { h = joinable[i].h; joinable[i].h = 0; }
+	ReleaseSRWLockExclusive(&joinable_lock);
+	return h;
+}
 int pthread_create(pthread_t *t, const pthread_attr_t *a, void *(*fn)(void *), void *arg) {
 	Start *s = malloc(sizeof *s);
 	if (!s) return ENOMEM;
 	s->fn = fn; s->arg = arg;
-	/* (the stack size is a reservation: committed as it grows) */
-	HANDLE h = (HANDLE)_beginthreadex(0, a ? (unsigned)a->stack : 0, thread_start, s, STACK_SIZE_PARAM_IS_A_RESERVATION, 0);
+	unsigned id;
+	/* (the stack size is a reservation: committed as it grows; suspended until its handle is filed) */
+	HANDLE h = (HANDLE)_beginthreadex(0, a ? (unsigned)a->stack : 0, thread_start, s, STACK_SIZE_PARAM_IS_A_RESERVATION | CREATE_SUSPENDED, &id);
 	if (!h) { free(s); return EAGAIN; }
+	*t = id;
+	int kept = a && a->detached;
+	AcquireSRWLockExclusive(&joinable_lock);
+	for (int i = 0; i < 1024 && !kept; i++) if (!joinable[i].h) { joinable[i].id = id; joinable[i].h = h; kept = 1; }
+	ReleaseSRWLockExclusive(&joinable_lock);
+	ResumeThread(h);
 	if (a && a->detached) CloseHandle(h);
-	*t = h;   /* (a detached thread's handle is closed: for nothing but pthread_detach's no-op below) */
 	return 0;
 }
-int pthread_detach(pthread_t t) { CloseHandle(t); return 0; }
-int pthread_join(pthread_t t, void **result) { WaitForSingleObject(t, INFINITE); CloseHandle(t); if (result) *result = 0; return 0; }
-pthread_t pthread_self(void) { return GetCurrentThread(); }
+int pthread_detach(pthread_t t) { HANDLE h = joinable_take(t); if (h) CloseHandle(h); return 0; }
+int pthread_join(pthread_t t, void **result) {
+	HANDLE h = joinable_take(t);
+	if (!h) return ESRCH;
+	WaitForSingleObject(h, INFINITE); CloseHandle(h);
+	if (result) *result = 0;
+	return 0;
+}
+pthread_t pthread_self(void) { return GetCurrentThreadId(); }
+int pthread_equal(pthread_t a, pthread_t b) { return a == b; }
 int pthread_setname_np(pthread_t t, const char *name) {
 	wchar_t w[64];
 	if (!MultiByteToWideChar(CP_UTF8, 0, name, -1, w, 64)) return EINVAL;
-	return SUCCEEDED(SetThreadDescription(t, w)) ? 0 : EINVAL;
+	HANDLE h = OpenThread(THREAD_SET_LIMITED_INFORMATION, 0, (DWORD)t);
+	if (!h) return ESRCH;
+	HRESULT r = SetThreadDescription(h, w); CloseHandle(h);
+	return SUCCEEDED(r) ? 0 : EINVAL;
 }
+int pthread_getname_np(pthread_t t, char *buf, size_t n) {
+	if (n) buf[0] = 0;
+	HANDLE h = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, 0, (DWORD)t);
+	if (!h) return ESRCH;
+	wchar_t *w = 0;
+	if (SUCCEEDED(GetThreadDescription(h, &w)) && w) { WideCharToMultiByte(CP_UTF8, 0, w, -1, buf, (int)n, 0, 0); if (n) buf[n - 1] = 0; LocalFree(w); }
+	CloseHandle(h);
+	return 0;
+}
+int sched_yield(void) { SwitchToThread(); return 0; }
 _Noreturn void pthread_exit(void *result) { (void)result; _endthreadex(0); abort(); }
 
 int clock_gettime(int clock, struct timespec *t) {

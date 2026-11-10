@@ -16,3 +16,6 @@
   The only calls left without an implementation at start-up are the graphics library's.
 - Sony's graphics library (GXM) and its GPU services, recompiled from the player's own firmware update file (3.74)
   and loaded with the game: its graphics calls run Sony's code. The game goes on to set up its audio and input.
+- The rest of the runtime: the renderers (software and GPU, through SDL3), the shader translator, audio (NGS, ATRAC9),
+  touch, motion and controllers, the window and the in-game overlay, and Project Nativ's patches for the game.
+  The game draws its title screen. `play.cmd` starts it from the build tree.
