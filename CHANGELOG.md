@@ -36,3 +36,7 @@
 - The build uses llvm-mingw and Ninja instead of Visual Studio's clang-cl: one compiler for the runtime and the
   game's code, the one Project Nativ builds with, fetched by `tools/get_toolchain.py`. Visual Studio is no longer
   needed.
+- The launcher (`abyssport.exe`), in the look of mc3port's and sm2port's: whether the game is ready, the Original,
+  Enhanced and Custom styles, picture, effects, game and audio settings, the keyboard's keys and the mouse's buttons,
+  and a page on how the console's touch screen, rear pad, tilt and camera are played on a PC. In Italian and English.
+  Play starts the game and the launcher comes back when it ends.

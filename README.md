@@ -22,7 +22,7 @@ compiler is fetched for you.
    copy and Sony's firmware update file (3.74) into `game/library`. About ten minutes.
 4. `cmake --preset pc-x64`, then `cmake --build --preset pc-x64-release`. The first build takes about ten minutes:
    the game is 425 MB of C.
-5. `play.cmd`
+5. `build\pc-x64\abyssport.exe`, the launcher (or `play.cmd`, which starts the game directly)
 
 ## Credits
 

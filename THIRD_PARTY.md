@@ -10,6 +10,7 @@ library keeps its own licence, whose text travels with it.
 |---|---|---|
 | [Project Nativ](https://github.com/TheLostPantheon/nativ) at `4b1c428` | GPL 2.0 or later | Its runtime, file by file, each with a header naming the file it comes from: `src/core/` (kernel, memory, files, FIOS, PSARC, saved data, settings, the host), `src/gfx/` (the GPU boundary, the renderers, the shader translator), `src/audio/`, `src/input/`, `src/media/`, `src/ui/` (window, overlay), `src/debug/`, `src/platform/` (its Windows layer). `src/recomp/rt.h`, the recompiled code's header. `src/game/hooks.c`, its patches for Golden Abyss (`packs/PCSA00029/hooks.c`). `res/shaders.txt`, its shader recipes for the game (`packs/PCSA00029/shaders.txt`: no game bytes in it). The network part is not taken: `src/core/net.c` stands in for it. |
 | [Vita3K](https://github.com/Vita3K/Vita3K) | GPL 2.0 or later | (nothing yet) |
+| [mc3port](https://github.com/SickSartori/mc3port) | MIT, (c) 2026 SickSartori | The launcher's look, layout and widgets (`src/launcher/launcher.cpp`, from its `src/pc/launcher_ui.cpp`), on SDL3 |
 
 Also from Project Nativ, the tools that make the game's code from the player's own copy (Python, each file with a
 line naming its source): `tools/recompiler/` (the analyser, the ARM to C recompiler, the memory images),
@@ -35,6 +36,7 @@ The decrypter is itself ported from other projects, which Project Nativ credits:
 | [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9) | | MIT | `third_party/libatrac9/` (`LICENSE`) |
 | [AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK): FSR 3.1's upscaler shaders | v1.1.4 | MIT | `third_party/fidelityfx/` (`LICENSE.txt`); compiled into `src/gfx/fsr_shaders.h` |
 | HE-VAG coefficients from [vgmstream](https://github.com/vgmstream/vgmstream) | | ISC | `third_party/hevag/hevag_coefs.h` (in its header) |
+| [Barlow Semi Condensed](https://github.com/jpt/barlow) by Jeremy Tribby: the launcher's letters | | SIL Open Font License 1.1 | `third_party/fonts/` (`OFL.txt`) |
 | [Input Prompts](https://kenney.nl/assets/input-prompts) by Kenney: the touch card's button icons | 1.5A | CC0 1.0 | `third_party/kenney-prompts/` (`License.txt`) |
 
 ## Downloaded when the build is configured

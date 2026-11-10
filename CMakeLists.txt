@@ -173,3 +173,17 @@ set_tests_properties(abyss_first_frames PROPERTIES
     ENVIRONMENT "RECOMP_MODULES=libc.img,libgxm_es4.img,libgpu_es4.img,libfios2.img,libscemp4.img;RECOMP_GFX=soft;RECOMP_SHADERS=interp;RECOMP_NO_MSPACE=1;RECOMP_SRGB=1;RECOMP_TITLE=PCSA00029;RECOMP_HEADLESS=1;RECOMP_FS=fs;RECOMP_LOG=0;RECOMP_SHOT=3;RECOMP_SHOT_LAST=3"
     PASS_REGULAR_EXPRESSION "frame 3 shot: the last one asked for"
     TIMEOUT 300)
+
+# The launcher: the first screen (the game ready or not, settings, controls, how the console's touch and tilt are
+# played on a PC); Play starts abyss. In the look of mc3port's and sm2port's launchers, on SDL3. A window program:
+# no console behind it.
+add_executable(abyssport WIN32 src/launcher/launcher.cpp src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c)
+target_include_directories(abyssport PRIVATE src/core src/platform "${CMAKE_SOURCE_DIR}")
+target_compile_options(abyssport PRIVATE -w)
+target_compile_definitions(abyssport PRIVATE ABYSS_VERSION="${PROJECT_VERSION}")
+# settings.c is the runtime's, written for POSIX: the Windows layer in front of it here too.
+set_property(SOURCE src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c APPEND PROPERTY COMPILE_OPTIONS ${ABYSS_COMPAT})
+target_link_libraries(abyssport PRIVATE imgui SDL3::SDL3-static pthread)
+# Barlow Semi Condensed (SIL Open Font License, third_party/fonts): the launcher's letters, beside the program.
+add_custom_command(TARGET abyssport POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/third_party/fonts" "$<TARGET_FILE_DIR:abyssport>/fonts")
