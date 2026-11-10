@@ -8,7 +8,7 @@ library keeps its own licence, whose text travels with it.
 
 | Project | Licence | What abyssport takes |
 |---|---|---|
-| [Project Nativ](https://github.com/TheLostPantheon/nativ) at `4b1c428` | GPL 2.0 or later | Its runtime, file by file, each with a header naming the file it comes from: `src/core/` (kernel, memory, files, FIOS, PSARC, saved data, settings, the host), `src/gfx/` (the GPU boundary, the renderers, the shader translator), `src/audio/`, `src/input/`, `src/media/`, `src/ui/` (window, overlay), `src/debug/`, `src/platform/platform_win32.c`. `src/recomp/rt.h`, the recompiled code's header. `src/game/hooks.c`, its patches for Golden Abyss (`packs/PCSA00029/hooks.c`). `src/platform/posix/compat.h` and the file calls of `src/platform/posix.c` (from `runtime/platform/win32_compat.*`). `res/shaders.txt`, its shader recipes for the game (`packs/PCSA00029/shaders.txt`: no game bytes in it). The network part is not taken: `src/core/net.c` stands in for it. |
+| [Project Nativ](https://github.com/TheLostPantheon/nativ) at `4b1c428` | GPL 2.0 or later | Its runtime, file by file, each with a header naming the file it comes from: `src/core/` (kernel, memory, files, FIOS, PSARC, saved data, settings, the host), `src/gfx/` (the GPU boundary, the renderers, the shader translator), `src/audio/`, `src/input/`, `src/media/`, `src/ui/` (window, overlay), `src/debug/`, `src/platform/` (its Windows layer). `src/recomp/rt.h`, the recompiled code's header. `src/game/hooks.c`, its patches for Golden Abyss (`packs/PCSA00029/hooks.c`). `res/shaders.txt`, its shader recipes for the game (`packs/PCSA00029/shaders.txt`: no game bytes in it). The network part is not taken: `src/core/net.c` stands in for it. |
 | [Vita3K](https://github.com/Vita3K/Vita3K) | GPL 2.0 or later | (nothing yet) |
 
 Also from Project Nativ, the tools that make the game's code from the player's own copy (Python, each file with a
@@ -52,3 +52,12 @@ FFmpeg is not linked in: its libraries are used as they are built, as DLLs besid
 | Software | Version | Licence | Use |
 |---|---|---|---|
 | [FFmpeg](https://ffmpeg.org): libavcodec, libavutil and libswresample, from [BtbN's builds](https://github.com/BtbN/FFmpeg-Builds) (`win64-lgpl-shared`, 31 October 2026) | 8.1.3 | LGPL 2.1 or later | The H.264 decoder behind the game's films |
+
+## Used to build, not part of the program
+
+`tools/get_toolchain.py` downloads these into `toolchain/`, pinned by version and hash.
+
+| Software | Version | Licence | Use |
+|---|---|---|---|
+| [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) | 20261104 (Clang 23.1.5) | Apache 2.0 with LLVM exceptions; mingw-w64's runtime under its own permissive licences | The compiler; its C and C++ libraries and winpthreads are linked into the program |
+| [Ninja](https://ninja-build.org) | 1.13.2 | Apache 2.0 | Runs the build |

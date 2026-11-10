@@ -1,44 +1,42 @@
 cmake_minimum_required(VERSION 3.25)
 project(abyssport VERSION 0.1.0 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Static CRT everywhere: the program must not depend on redistributables.
-# Read when targets are created, so it has to come before them.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+if(NOT MINGW OR NOT CMAKE_C_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "abyssport is built with llvm-mingw for 64-bit Windows: use the 'pc-x64' preset "
+                        "(tools/get_toolchain.py fetches the compiler). The Vita's 4 GiB of address space is one "
+                        "block of the process's memory, and the game's recompiled code is GNU C.")
+endif()
 
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(FATAL_ERROR "The PC build must be 64-bit (x64): the Vita's 4 GiB of address space is one block of the "
-                        "process's memory. Use the 'pc-x64' preset.")
-endif()
-if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
-    message(FATAL_ERROR "Use a Visual Studio generator (the 'pc-x64' preset): the game's recompiled code and the "
-                        "runtime are built by clang-cl, the libraries by MSVC, and only that generator picks a "
-                        "compiler per target.")
-endif()
+# Optimised without -DNDEBUG, as Project Nativ builds: the runtime's own checks stay in.
+set(CMAKE_C_FLAGS_RELEASE "-O2")
+set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+# One program, nothing beside it but FFmpeg's DLLs: the C and C++ libraries and winpthreads are linked in.
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 
 # The game's code, recompiled from the player's own copy: never in the repository (game/ is ignored).
 set(ABYSS_RECOMP_DIR "${CMAKE_SOURCE_DIR}/game/library/decrypted/PCSA00029/recomp" CACHE PATH
-    "The recompiler's output for PCSA00029 1.00: game*.c, the libraries' mod_*.c, and their .img memory images")
+    "The recompiler's output for PCSA00029 1.00 (tools/make_game.py): game*.c, the libraries' mod_*.c, the .img images")
 file(GLOB ABYSS_GAME_SOURCES CONFIGURE_DEPENDS "${ABYSS_RECOMP_DIR}/game.c" "${ABYSS_RECOMP_DIR}/game_part*.c"
                                                "${ABYSS_RECOMP_DIR}/mod_*.c")
 if(NOT ABYSS_GAME_SOURCES)
     message(FATAL_ERROR "The game's recompiled code is missing: no game.c in ${ABYSS_RECOMP_DIR}. It is made from "
-                        "your own copy of the game; set ABYSS_RECOMP_DIR if it is somewhere else.")
+                        "your own copy of the game by tools/make_game.py; set ABYSS_RECOMP_DIR if it is somewhere else.")
 endif()
 
-# The game: 32,000 functions of ARM code as C, 425 MB of it. Built by clang-cl (the "C++ Clang tools" component of
-# Visual Studio): the code uses GNU C (statement expressions, __atomic_*, __thread), and MSVC's optimiser does not
-# finish a single one of its files in an hour and a half where Clang takes 20 seconds. With it, Sony's libraries
-# recompiled the same way: libc and libfios2 from the game, libgxm, libgpu and libscemp4 from the firmware. An object
-# library: each library registers its tables from a constructor nothing refers to, which a static library would
-# leave out of the program.
+# The POSIX names Windows spells differently, in front of every C file of ours (src/platform/win32_compat.h):
+# the runtime and the recompiled code are written for POSIX. 64-bit file offsets; mingw-w64's localtime_r.
+set(ABYSS_COMPAT -D_FILE_OFFSET_BITS=64 -include "${CMAKE_SOURCE_DIR}/src/platform/win32_compat.h")
+
+# The game: 32,000 functions of ARM code as C, 425 MB of it, and Sony's libraries recompiled the same way: libc and
+# libfios2 from the game, libgxm, libgpu and libscemp4 from the firmware. An object library: each library registers
+# its tables from a constructor nothing refers to, which a static library would leave out of the program.
 add_library(abyssgame OBJECT ${ABYSS_GAME_SOURCES})
-set_target_properties(abyssgame PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
 target_include_directories(abyssgame PUBLIC src/recomp)
 # No fused multiply-adds: the Vita's VFP rounds the product before it adds (rt.h). No warnings: generated code.
-target_compile_options(abyssgame PRIVATE /clang:-ffp-contract=off -w /MP)
+target_compile_options(abyssgame PRIVATE -ffp-contract=off -w ${ABYSS_COMPAT} -D_POSIX_THREAD_SAFE_FUNCTIONS)
 
 include(FetchContent)
 
@@ -82,15 +80,13 @@ add_library(imgui STATIC
     third_party/imgui/backends/imgui_impl_sdlgpu3.cpp
 )
 target_include_directories(imgui PUBLIC third_party/imgui third_party/imgui/backends)
+target_compile_options(imgui PRIVATE -w)
 target_link_libraries(imgui PUBLIC SDL3::SDL3-static)
 
 # LibAtrac9 (MIT, third_party/libatrac9): the decoder of the game's ATRAC9 audio.
 file(GLOB ABYSS_ATRAC9_SOURCES CONFIGURE_DEPENDS third_party/libatrac9/*.c)
 add_library(atrac9 STATIC ${ABYSS_ATRAC9_SOURCES})
-set_target_properties(atrac9 PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
 target_compile_options(atrac9 PRIVATE -w)
-# (its header marks the functions dllimport under MSVC unless it is told it is being built)
-target_compile_definitions(atrac9 PUBLIC COMPILING_DLL)
 
 # The touch card's input icons (third_party/kenney-prompts, CC0) as bytes the overlay includes.
 file(READ third_party/kenney-prompts/prompts.png ABYSS_PROMPTS HEX)
@@ -98,9 +94,8 @@ string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," ABYSS_PROMPTS "${ABYSS_PROMPT
 file(WRITE "${CMAKE_BINARY_DIR}/generated/prompts_png.h" "static const unsigned char prompts_png[] = {${ABYSS_PROMPTS}};\n")
 
 # The program: the host of the recompiled code and the Vita's system: kernel, files, graphics, audio, input.
-# Built by clang-cl too: it shares rt.h with the game's code, and the runtime, adapted from Project Nativ, is GNU C
-# over POSIX (src/platform/posix).
-add_executable(abyss
+# The runtime is adapted from Project Nativ.
+set(ABYSS_C_SOURCES
     src/audio/ngs.c
     src/core/apputil.c
     src/core/fios.c
@@ -141,29 +136,29 @@ add_executable(abyss
     src/media/jpeg.c
     src/media/video.c
     src/platform/platform_win32.c
-    src/platform/posix.c
-    src/ui/overlay.cpp
+    src/platform/win32_compat.c
     src/ui/window.c
 )
-set_target_properties(abyss PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
+add_executable(abyss ${ABYSS_C_SOURCES} src/ui/overlay.cpp)
 target_include_directories(abyss PRIVATE
-    src/audio src/core src/debug src/gfx src/gfx/fsr src/input src/media src/platform src/platform/posix src/ui
+    src/audio src/core src/debug src/gfx src/gfx/fsr src/input src/media src/platform src/ui
     "${CMAKE_SOURCE_DIR}"                       # ("third_party/...")
     "${CMAKE_BINARY_DIR}/generated"
     "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}"
+    "${ffmpeg_SOURCE_DIR}/include"
 )
-# compat.h in front of every file: the POSIX file calls under Windows' names (src/platform/posix). No warnings
-# for now: the adapted code is kept as it is upstream.
-target_compile_options(abyss PRIVATE /FIcompat.h -w /MP)
-target_compile_definitions(abyss PRIVATE _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
-# The settings the game plays with, as Project Nativ's pack for it sets them (packs/PCSA00029/pack.toml RUN_ENV).
-set_source_files_properties(src/core/main.c PROPERTIES COMPILE_DEFINITIONS
+# No warnings for now: the adapted code is kept as it is upstream. (_POSIX_THREAD_SAFE_FUNCTIONS: C only -- with it
+# mingw-w64 defines the localtime_r that Dear ImGui's headers also define.)
+target_compile_options(abyss PRIVATE -w ${ABYSS_COMPAT})
+set_source_files_properties(${ABYSS_C_SOURCES} PROPERTIES COMPILE_DEFINITIONS _POSIX_THREAD_SAFE_FUNCTIONS)
+# The settings the game plays with, as Project Nativ's pack for it sets them (tools/PCSA00029.toml RUN_ENV).
+set_property(SOURCE src/core/main.c APPEND PROPERTY COMPILE_DEFINITIONS
     "RECOMP_BUILTIN_ENV=\"RECOMP_GAME_OPTIONS=fov,view_distance RECOMP_SRGB=1 RECOMP_ASPECT_HOOK=1 RECOMP_HUD_DRAWS=2d RECOMP_TARGET_SCALE=720x408:1.3333 RECOMP_CAMERA_LAMP=1 RECOMP_FSR_SUPPORTED=1\"")
-target_link_libraries(abyss PRIVATE abyssgame atrac9 imgui zlibstatic SDL3::SDL3-static bcrypt
-    "${ffmpeg_SOURCE_DIR}/lib/avcodec.lib" "${ffmpeg_SOURCE_DIR}/lib/avutil.lib")
-# The films: sceAvcdec through libavcodec (src/media/video.c).
-target_include_directories(abyss PRIVATE "${ffmpeg_SOURCE_DIR}/include")
-set_source_files_properties(src/media/video.c PROPERTIES COMPILE_DEFINITIONS RECOMP_AVCODEC)
+# The films: sceAvcdec through libavcodec.
+set_property(SOURCE src/media/video.c APPEND PROPERTY COMPILE_DEFINITIONS RECOMP_AVCODEC)
+target_link_libraries(abyss PRIVATE abyssgame atrac9 imgui zlibstatic SDL3::SDL3-static
+    "${ffmpeg_SOURCE_DIR}/lib/libavcodec.dll.a" "${ffmpeg_SOURCE_DIR}/lib/libavutil.dll.a"
+    pthread winmm ws2_32 bcrypt)
 file(GLOB ABYSS_FFMPEG_DLLS "${ffmpeg_SOURCE_DIR}/bin/avcodec-*.dll" "${ffmpeg_SOURCE_DIR}/bin/avutil-*.dll"
                             "${ffmpeg_SOURCE_DIR}/bin/swresample-*.dll")
 add_custom_command(TARGET abyss POST_BUILD
@@ -171,7 +166,7 @@ add_custom_command(TARGET abyss POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ffmpeg_SOURCE_DIR}/LICENSE.txt" "$<TARGET_FILE_DIR:abyss>/FFmpeg-LICENSE.txt")
 
 # The check: the game starts and draws its first frames -- headless, on the software renderer, which is the reference
-# (81009ffc: module_start of 1.00). About a minute: the game loads its front end first.
+# (81009ffc: module_start of 1.00). The game loads its front end first.
 enable_testing()
 add_test(NAME abyss_first_frames COMMAND abyss game.img 81009ffc 100000000000 WORKING_DIRECTORY "${ABYSS_RECOMP_DIR}")
 set_tests_properties(abyss_first_frames PROPERTIES

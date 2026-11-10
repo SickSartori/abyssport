@@ -33,3 +33,6 @@
 
 - The settings that outlive a copy of the game are in abyssport's own folder (`%APPDATA%byssport`), no longer in
   Project Nativ's.
+- The build uses llvm-mingw and Ninja instead of Visual Studio's clang-cl: one compiler for the runtime and the
+  game's code, the one Project Nativ builds with, fetched by `tools/get_toolchain.py`. Visual Studio is no longer
+  needed.

@@ -12,15 +12,17 @@ Controls: [docs/controls.md](docs/controls.md).
 
 ## Building
 
-For now abyssport is built from source, on Windows, with Visual Studio 2026 and its "C++ Clang tools" component,
-and Python 3.11 or later.
+For now abyssport is built from source, on Windows. You need Python 3.11 or later and CMake 3.25 or later; the
+compiler is fetched for you.
 
 1. `pip install -r tools/requirements.txt`
-2. `python tools/make_game.py <your copy of the game> <PSVUPDAT.PUP>`: the game's code and data, made from your
+2. `python tools/get_toolchain.py`: llvm-mingw (Clang) and Ninja into `toolchain/`. Nothing is installed in the
+   system.
+3. `python tools/make_game.py <your copy of the game> <PSVUPDAT.PUP>`: the game's code and data, made from your
    copy and Sony's firmware update file (3.74) into `game/library`. About ten minutes.
-3. `cmake --preset pc-x64`, then `cmake --build --preset pc-x64-release`. The first build takes about a quarter of
-   an hour: the game is 425 MB of C.
-4. `play.cmd`
+4. `cmake --preset pc-x64`, then `cmake --build --preset pc-x64-release`. The first build takes about ten minutes:
+   the game is 425 MB of C.
+5. `play.cmd`
 
 ## Credits
 
