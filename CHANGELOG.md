@@ -25,3 +25,11 @@
 - `docs/controls.md`: how the console's sticks, touch screen, rear pad and gyroscope are played with a keyboard, a
   mouse or a controller.
 - The game's films play: H.264 through FFmpeg's libavcodec, whose DLLs sit beside the program.
+- The mouse's buttons can be put on any action, from the Controls page of the in-game menu.
+- The tools that make the game's code (decrypter, analyser, recompiler) are in `tools/`: nothing outside the
+  repository is needed any more.
+
+### Changed
+
+- The settings that outlive a copy of the game are in abyssport's own folder (`%APPDATA%byssport`), no longer in
+  Project Nativ's.

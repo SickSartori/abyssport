@@ -679,20 +679,10 @@ int main(int argc, char **argv) {
 	 * (RECOMP_HEADLESS: test, capture, verify) or one given its own file stays on its own, as the gate needs */
 	if (!getenv("RECOMP_HEADLESS") && !getenv("RECOMP_SETTINGS")) {
 		const char *sp = getenv("RECOMP_SETTINGS_SHARED");
-		char *pref = sp ? NULL : SDL_GetPrefPath("ProjectNativ", "Nativ"), path[1024] = "";
+		/* abyssport: its own folder (%APPDATA%/abyssport on Windows), not one shared with a Project Nativ install */
+		char *pref = sp ? NULL : SDL_GetPrefPath(NULL, "abyssport"), path[1024] = "";
 		if (sp) snprintf(path, sizeof path, "%s", sp);
-		else if (pref) {
-			snprintf(path, sizeof path, "%ssettings.ini", pref);
-			/* the name was Project Ativ: its settings are copied over once (as the launcher does) */
-			const char *at = strstr(pref, "ProjectNativ");
-			FILE *in = NULL, *out = NULL;
-			if (at && strlen(at) == 19 && access(path, F_OK) != 0) {   /* "ProjectNativ/Nativ/" */
-				char old[1024]; snprintf(old, sizeof old, "%.*sProjectAtiv%cAtiv%csettings.ini", (int)(at - pref), pref, at[12], at[18]);
-				if ((in = fopen(old, "rb")) && (out = fopen(path, "wb"))) { char b[4096]; size_t n; while ((n = fread(b, 1, sizeof b, in)) > 0) fwrite(b, 1, n, out); }
-			}
-			if (in) fclose(in);
-			if (out) fclose(out);
-		}
+		else if (pref) snprintf(path, sizeof path, "%ssettings.ini", pref);
 		SDL_free(pref);
 		if (path[0]) settings_load_shared(path);
 	}

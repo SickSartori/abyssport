@@ -119,7 +119,7 @@ static uint64_t rel_since_us;              /* when the capture last began (rel_o
 static int mouse_dx_q8, mouse_dy_q8;       /* motion since a raw-look hook last took it, x256 (atomics) */
 static int look_dx_q8, look_dy_q8;         /* the same motion, for the right-stick stand-in (this thread) */
 static volatile uint64_t raw_taken_us;     /* when a raw-look hook last took the motion */
-static int kbm_lmb, kbm_rmb;               /* captured mouse buttons held (R, L) */
+/* (abyssport: the captured mouse buttons held are in mouse_binds below, each on the action the player chose) */
 /* Tilt (motion.c's virtual pad): Uncharted's balance beams and river slide are steered by tilting the Vita, and
  * keyboard and mouse have no gyro. In a tilt section (window_tilt_tick: the section's per-frame update, hooked in
  * hooks.c) movement is restricted, so the move-left/right keys (A / D) tilt -- easing to a full tilt while held,
@@ -140,12 +140,32 @@ static KbBind kb_binds[] = {
 	{"bind_move_left", "Move left", "A", 0}, {"bind_move_right", "Move right", "D", 0},
 	{"bind_cross", "Cross", "Space", CROSS}, {"bind_circle", "Circle", "C", CIRCLE},
 	{"bind_square", "Square", "F", SQUARE}, {"bind_triangle", "Triangle", "E", TRIANGLE},
-	{"bind_l", "L (also the right mouse button)", "Q", LTRIG}, {"bind_r", "R (also the left mouse button)", "R", RTRIG},
+	{"bind_l", "L (aim)", "Q", LTRIG}, {"bind_r", "R (fire)", "R", RTRIG},
 	{"bind_start", "Start", "Return", START}, {"bind_select", "Select", "Tab", SELECT},
 	{"bind_up", "D-pad up", "Up", UP}, {"bind_down", "D-pad down", "Down", DOWN},
 	{"bind_left", "D-pad left", "Left", LEFT}, {"bind_right", "D-pad right", "Right", RIGHT},
 };
 enum { KB_N = (int)(sizeof kb_binds / sizeof kb_binds[0]) };
+/* abyssport: the captured mouse's buttons, each on one of the actions above or on none (settings "mouse_<button>":
+ * the action's name without "bind_", "" for none). The defaults are Nativ's fixed pair: left R, right L. A press
+ * does what that action's key does. Not captured (Alt held), the left and right buttons stay the touch panels. */
+typedef struct { const char *key, *label, *def; int action, held; } MouseBind;
+static MouseBind mouse_binds[] = {
+	{"mouse_left", "Left button", "r", -1, 0}, {"mouse_right", "Right button", "l", -1, 0}, {"mouse_middle", "Middle button", "", -1, 0},
+	{"mouse_x1", "Side button 1", "", -1, 0}, {"mouse_x2", "Side button 2", "", -1, 0},
+};
+enum { MB_N = (int)(sizeof mouse_binds / sizeof mouse_binds[0]) };
+static int mouse_bind_of(int sdl_button) {   /* SDL_BUTTON_LEFT 1, MIDDLE 2, RIGHT 3, X1 4, X2 5 -> the table's row, -1 */
+	static const int row[] = {-1, 0, 2, 1, 3, 4};
+	return sdl_button >= 1 && sdl_button <= 5 ? row[sdl_button] : -1;
+}
+static void mouse_bind_set(int m, int dn) {   /* that button went down or up: its action's button bit, or its held direction */
+	int a = mouse_binds[m].action;
+	mouse_binds[m].held = dn;
+	if (a < 0) return;
+	if (kb_binds[a].bit) { if (dn) buttons |= kb_binds[a].bit; else buttons &= ~kb_binds[a].bit; }
+	else kb_binds[a].held = dn;
+}
 static void tilt_section_update(void) {
 	uint64_t t = __atomic_load_n(&tilt_tick_ns, __ATOMIC_RELAXED);
 	int on = t && SDL_GetTicksNS() - t < 250000000ull;
@@ -165,7 +185,20 @@ static void kb_reload(void) {   /* the bindings from settings (at start, and whe
 		SDL_Keycode k = SDL_GetKeyFromName(name);
 		kb_binds[i].kc = k != SDLK_UNKNOWN ? k : SDL_GetKeyFromName(kb_binds[i].def);
 	}
+	for (int m = 0; m < MB_N; m++) {
+		char b[48]; const char *name = settings_str(mouse_binds[m].key, mouse_binds[m].def, b, sizeof b);
+		mouse_binds[m].action = -1;
+		for (int i = 0; i < KB_N; i++) if (!strcmp(kb_binds[i].key + 5, name)) mouse_binds[m].action = i;   /* ("bind_" + name) */
+	}
 	char sb[16]; shoulders_swapped = !strcmp(settings_str("shoulder_buttons", "triggers", sb, sizeof sb), "bumpers");
+}
+int window_mouse_count(void) { return MB_N; }
+const char *window_mouse_label(int m) { return m >= 0 && m < MB_N ? mouse_binds[m].label : ""; }
+int window_mouse_action(int m) { return m >= 0 && m < MB_N ? mouse_binds[m].action : -1; }   /* a row of the keys' table, -1 none */
+void window_mouse_bind(int m, int action) {   /* the menu's choice: that button on that action (-1: on none) */
+	if (m < 0 || m >= MB_N || action >= KB_N) return;
+	mouse_binds[m].action = action < 0 ? -1 : action;
+	settings_set_str(mouse_binds[m].key, action < 0 ? "" : kb_binds[action].key + 5); settings_save();
 }
 int window_kb_count(void) { return KB_N; }
 const char *window_kb_label(int i) { return i >= 0 && i < KB_N ? kb_binds[i].label : ""; }
@@ -175,7 +208,11 @@ void window_kb_bind(int i, SDL_Keycode k) {   /* the menu's Rebind: that action 
 	for (int j = 0; j < KB_N; j++) if (j != i && kb_binds[j].kc == k) { kb_binds[j].kc = SDLK_UNKNOWN; settings_set_str(kb_binds[j].key, ""); }
 	kb_binds[i].kc = k; settings_set_str(kb_binds[i].key, SDL_GetKeyName(k)); settings_save();
 }
-void window_kb_reset(void) { for (int i = 0; i < KB_N; i++) settings_set_str(kb_binds[i].key, kb_binds[i].def); settings_save(); kb_reload(); }
+void window_kb_reset(void) {
+	for (int i = 0; i < KB_N; i++) settings_set_str(kb_binds[i].key, kb_binds[i].def);
+	for (int m = 0; m < MB_N; m++) settings_set_str(mouse_binds[m].key, mouse_binds[m].def);
+	settings_save(); kb_reload();
+}
 int window_kbm_active(void) { return kbm_on; }
 /* a game's raw-look hook, once per game frame: the mouse's motion since its last call, in counts (y down),
  * and whether the mouse is looking at all (0: nothing to apply, the deltas are 0) */
@@ -885,7 +922,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 	}
 	int scale = getenv("RECOMP_SCALE") ? atoi(getenv("RECOMP_SCALE")) : 1;
 	if (scale < 1) scale = 1;
-	{ const char *name = getenv("RECOMP_GAME_NAME"); win = SDL_CreateWindow(name && *name ? name : "Project Nativ", 960 * scale, 544 * scale, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY); }
+	{ const char *name = getenv("RECOMP_GAME_NAME"); win = SDL_CreateWindow(name && *name ? name : "abyssport", 960 * scale, 544 * scale, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY); }
 	{	/* the app icon (assets/brand): the install's, as vitarecomp run names it (an AppImage's moves on every start), else
 		 * the one the build saw */
 		const char *ip = getenv("RECOMP_ICON");
@@ -1098,8 +1135,8 @@ void window_run(void *(*fn)(void *), void *arg) {
 					look_dx_q8 += qx; look_dy_q8 += qy;
 				} else {
 					int dn = e.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
-					if (e.button.button == SDL_BUTTON_LEFT) { kbm_lmb = dn; if (dn) buttons |= RTRIG; else buttons &= ~RTRIG; }
-					if (e.button.button == SDL_BUTTON_RIGHT) { kbm_rmb = dn; if (dn) buttons |= LTRIG; else buttons &= ~LTRIG; }
+					int m = mouse_bind_of(e.button.button);
+					if (m >= 0) mouse_bind_set(m, dn);
 				}
 				continue;
 			}
@@ -1153,7 +1190,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (want != rel_on && win) {
 				if (!SDL_SetWindowRelativeMouseMode(win, want) && want) fprintf(stderr, "mouse: capture refused: %s\n", SDL_GetError());
 				if (want) rel_since_us = now_us();   /* (the capture's first motion can carry the pointer's jump to the centre: dropped) */
-				if (!want) { if (gesture_drag) { gesture_drag = 0; touch_down = 0; } if (twist_drag) { twist_drag = 0; twist_down = twist_pad; } if (kbm_lmb) buttons &= ~RTRIG; if (kbm_rmb) buttons &= ~LTRIG; kbm_lmb = kbm_rmb = 0; __atomic_store_n(&mouse_dx_q8, 0, __ATOMIC_RELAXED); __atomic_store_n(&mouse_dy_q8, 0, __ATOMIC_RELAXED); }
+				if (!want) { if (gesture_drag) { gesture_drag = 0; touch_down = 0; } if (twist_drag) { twist_drag = 0; twist_down = twist_pad; } for (int m = 0; m < MB_N; m++) if (mouse_binds[m].held) mouse_bind_set(m, 0); __atomic_store_n(&mouse_dx_q8, 0, __ATOMIC_RELAXED); __atomic_store_n(&mouse_dy_q8, 0, __ATOMIC_RELAXED); }
 				rel_on = want;
 			}
 			tilt_section_update();

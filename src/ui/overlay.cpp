@@ -185,7 +185,8 @@ static const char *quit_label(void) { return std::getenv("ATIV_LAUNCHER") ? "Bac
 int overlay_wants_capture(void) { return g_want_capture.exchange(false); }
 
 extern "C" { int window_kb_count(void); const char *window_kb_label(int i); const char *window_kb_key_name(int i);
-             void window_kb_bind(int i, SDL_Keycode k); void window_kb_reset(void); int window_kbm_active(void); }
+             void window_kb_bind(int i, SDL_Keycode k); void window_kb_reset(void); int window_kbm_active(void);
+             int window_mouse_count(void); const char *window_mouse_label(int m); int window_mouse_action(int m); void window_mouse_bind(int m, int action); }
 static int g_rebind = -1;   /* the Controls page's Rebind: the next key pressed goes to this action */
 void overlay_process_event(const SDL_Event *event) {
 	if (!g_ctx || !g_has_window) return;
@@ -496,7 +497,27 @@ static void page_controls(void) {
 		}
 		ImGui::EndTable();
 	}
-	if (ImGui::Button("Reset keys to the defaults")) { window_kb_reset(); g_rebind = -1; }
+	/* abyssport: the mouse's buttons while it is the look, each on one of the actions above */
+	section_label("Mouse buttons");
+	if (ImGui::BeginTable("mousebinds", 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+		ImGui::TableSetupColumn("Button"); ImGui::TableSetupColumn("Action");
+		ImGui::PushStyleColor(ImGuiCol_Text, ui::muted); ImGui::TableHeadersRow(); ImGui::PopStyleColor();
+		for (int m = 0, n = window_mouse_count(); m < n; m++) {
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn(); ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted(window_mouse_label(m));
+			ImGui::TableNextColumn(); ImGui::PushID(1000 + m); ImGui::SetNextItemWidth(-FLT_MIN);
+			int a = window_mouse_action(m);
+			if (ImGui::BeginCombo("##action", a < 0 ? "none" : window_kb_label(a))) {
+				if (ImGui::Selectable("none", a < 0)) window_mouse_bind(m, -1);
+				for (int i = 0, k = window_kb_count(); i < k; i++) if (ImGui::Selectable(window_kb_label(i), a == i)) window_mouse_bind(m, i);
+				ImGui::EndCombo();
+			}
+			ImGui::PopID();
+		}
+		ImGui::EndTable();
+	}
+	ImGui::TextColored(ui::muted, "With Alt held the cursor is a finger: the left button touches the screen, the right one the rear pad.");
+	if (ImGui::Button("Reset keys and mouse buttons to the defaults")) { window_kb_reset(); g_rebind = -1; }
 	section_label("The game's controls");
 	reference_table("controls", window_controls_count, window_controls_row);
 	section_label("Shortcuts");
@@ -510,7 +531,7 @@ static void page_help(void) {
 		ImVec2 p = ImGui::GetCursorScreenPos(); const float h = ImGui::GetFontSize() * 1.5f;
 		ImGui::Dummy(ImVec2(ui::wordmark(ImGui::GetWindowDrawList(), p, h), h));
 	}
-	ImGui::TextWrapped("Project Nativ: this PS Vita game, statically recompiled to native code, running on this computer's own CPU and GPU.");
+	ImGui::TextWrapped("abyssport: Uncharted: Golden Abyss, statically recompiled to native code, running on this computer's own CPU and GPU. Built on Project Nativ's recompiler and runtime (GPL).");
 	const char *title = std::getenv("RECOMP_TITLE");
 	int v = SDL_GetVersion();
 	ImGui::TextDisabled("%s  ·  Dear ImGui %s  ·  SDL %d.%d.%d", title && *title ? title : "unknown title", IMGUI_VERSION, SDL_VERSIONNUM_MAJOR(v), SDL_VERSIONNUM_MINOR(v), SDL_VERSIONNUM_MICRO(v));
@@ -540,7 +561,7 @@ static void build_ui(void) {
 	ImGui::Begin("##menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar);
 	ImGui::PopStyleColor();
 	/* header: the game, Paused, Resume */
-	{	const char *name = std::getenv("RECOMP_GAME_NAME"); if (!name || !*name) name = std::getenv("RECOMP_TITLE"); if (!name || !*name) name = "Project Nativ";
+	{	const char *name = std::getenv("RECOMP_GAME_NAME"); if (!name || !*name) name = std::getenv("RECOMP_TITLE"); if (!name || !*name) name = "abyssport";
 		ui::heading(name, em * 1.35f);
 		ImGui::SameLine(0, em * 0.7f); ImGui::SetCursorPosY(ImGui::GetCursorPosY() + em * 0.18f); ui::chip("Paused", ui::accent);
 		float rw = ImGui::CalcTextSize("Resume").x + ImGui::GetStyle().FramePadding.x * 2;

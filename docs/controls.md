@@ -21,8 +21,8 @@ fix one of the two.
 | Circle | C |
 | Square | F |
 | Triangle | E |
-| L (aim) | Q, or the right mouse button |
-| R (fire) | R, or the left mouse button |
+| L (aim) | Q |
+| R (fire) | R |
 | Start | Enter |
 | Select | Tab |
 | D-pad | Arrow keys |
@@ -35,7 +35,13 @@ action is taken from the one that had it.
 With keyboard and mouse in use, the menu closed and the window focused, the mouse is captured:
 
 - moving it turns the camera (`mouse_look`, with `mouse_sens` and `mouse_invert`);
-- the left button is R (fire), the right button is L (aim).
+- its buttons are actions: by default the left button is R (fire) and the right button is L (aim).
+
+Each of the five buttons (left, right, middle and the two side buttons) can be put on any action of the keyboard
+table, or on none, from the Controls page of the in-game menu. The settings are `mouse_left`, `mouse_right`,
+`mouse_middle`, `mouse_x1` and `mouse_x2`, each an action's name (`r`, `l`, `cross`, `triangle`...) or empty.
+The left button also starts the swipes and twists the game asks for while the mouse is captured, whatever it is
+set to.
 
 Holding **Alt** frees the cursor. The cursor is then a finger: the left button touches the front screen, the
 right button touches the rear pad. This is how the game's touch actions are done: tapping an icon, rubbing a
@@ -73,5 +79,4 @@ Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map
 
 ## Not there yet
 
-- Mouse buttons cannot be rebound: left and right are fixed to R and L.
 - There is no launcher: settings are changed in the in-game menu or in `settings.ini`.
