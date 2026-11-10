@@ -10,3 +10,5 @@
   system call the game makes (none is implemented yet).
 - Sony's libc and FIOS, the copies the game ships, recompiled and loaded with the game: its calls to them run their
   own code.
+- The Vita's kernel: threads, mutexes, semaphores, events, memory blocks and time. The game allocates its heaps,
+  starts its worker threads and reaches the set-up of its graphics.

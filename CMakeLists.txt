@@ -38,16 +38,25 @@ target_include_directories(abyssgame PUBLIC src/recomp)
 # No fused multiply-adds: the Vita's VFP rounds the product before it adds (rt.h). No warnings: generated code.
 target_compile_options(abyssgame PRIVATE /clang:-ffp-contract=off -w /MP)
 
-# The program: the host of the recompiled code. Built by clang-cl too: it shares rt.h with the game's code.
+# The program: the host of the recompiled code and the Vita's system calls. Built by clang-cl too: it shares rt.h
+# with the game's code, and the parts adapted from Project Nativ are GNU C over POSIX (src/platform/posix).
 add_executable(abyss
     src/game/hooks.c
     src/host/main.c
+    src/host/pending.c
+    src/kernel/hle.c
+    src/kernel/kernel.c
+    src/kernel/sysmem.c
+    src/platform/platform.c
+    src/platform/posix.c
 )
 set_target_properties(abyss PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
-target_link_libraries(abyss PRIVATE abyssgame)
-target_compile_definitions(abyss PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_include_directories(abyss PRIVATE src/kernel src/platform src/platform/posix)
+target_link_libraries(abyss PRIVATE abyssgame bcrypt)
+target_compile_definitions(abyss PRIVATE _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
 
-# The first check: the libraries load and Sony's libc makes its first system call (81009ffc: module_start of 1.00).
+# The first check: the libraries start, then the game, whose first act is to ask the kernel for its heaps
+# (81009ffc: module_start of 1.00; it stops at the 20th call to an import nothing implements yet).
 enable_testing()
-add_test(NAME abyss_boots COMMAND abyss "${ABYSS_RECOMP_DIR}/game.img" 81009ffc 1)
-set_tests_properties(abyss_boots PROPERTIES PASS_REGULAR_EXPRESSION "#1 sceKernelGetProcessParam")
+add_test(NAME abyss_boots COMMAND abyss "${ABYSS_RECOMP_DIR}/game.img" 81009ffc 20)
+set_tests_properties(abyss_boots PROPERTIES PASS_REGULAR_EXPRESSION "memblock 'Resource' 0x4780000 bytes")
