@@ -8,7 +8,7 @@
 #include <string.h>
 #include "hle.h"
 
-static const HleEntry *const tables[] = { hle_kernel, hle_sysmem };
+static const HleEntry *const tables[] = { hle_kernel, hle_libc, hle_io, hle_sysmem, hle_apputil, hle_fios };
 
 HleFn hle_find(const char *name) {
 	for (size_t t = 0; t < sizeof tables / sizeof *tables; t++)
@@ -16,3 +16,7 @@ HleFn hle_find(const char *name) {
 			if (!strcmp(e->name, name)) return e->fn;
 	return 0;
 }
+
+/* an imported variable's slot. shortcut: none known -- this game and its two libraries import no variable (the
+ * host refuses an image that does); Nativ's table comes back with a library that needs it */
+uint32_t hle_var_addr(const char *name) { (void)name; return 0; }

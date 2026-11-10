@@ -12,3 +12,5 @@
   own code.
 - The Vita's kernel: threads, mutexes, semaphores, events, memory blocks and time. The game allocates its heaps,
   starts its worker threads and reaches the set-up of its graphics.
+- Files, Sony's FIOS over them, PSARC archives, saved data and settings: the game opens its data (`gamedata.bin`).
+  The only calls left without an implementation at start-up are the graphics library's.

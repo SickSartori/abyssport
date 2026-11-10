@@ -9,12 +9,20 @@
 #include <stdint.h>
 #include <time.h>
 
-/* a mutex is an SRWLOCK and a condition a CONDITION_VARIABLE: one pointer each, zero when new. Not recursive. */
-typedef struct { void *p; } pthread_mutex_t;
+/* a mutex is an SRWLOCK, with its owner and depth when it is recursive; a condition is a CONDITION_VARIABLE.
+ * All zero when new. A recursive mutex can't be waited on with a condition. */
+typedef struct { void *lock; unsigned recursive, owner, depth; } pthread_mutex_t;
 typedef struct { void *p; } pthread_cond_t;
+typedef int pthread_mutexattr_t;
+#define PTHREAD_MUTEX_RECURSIVE 1
+int pthread_mutexattr_init(pthread_mutexattr_t *a);
+int pthread_mutexattr_settype(pthread_mutexattr_t *a, int type);
+typedef struct { void *p; } pthread_once_t;   /* an INIT_ONCE */
+#define PTHREAD_ONCE_INIT {0}
+int pthread_once(pthread_once_t *once, void (*fn)(void));
 #define PTHREAD_MUTEX_INITIALIZER {0}
 #define PTHREAD_COND_INITIALIZER {0}
-int pthread_mutex_init(pthread_mutex_t *m, const void *attr);
+int pthread_mutex_init(pthread_mutex_t *m, const pthread_mutexattr_t *attr);
 int pthread_mutex_lock(pthread_mutex_t *m);
 int pthread_mutex_trylock(pthread_mutex_t *m);   /* 0 when taken */
 int pthread_mutex_unlock(pthread_mutex_t *m);

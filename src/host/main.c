@@ -20,6 +20,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "hle.h"
+#include "settings.h"
 
 /* the recompiled code's own tables (game.c) */
 extern const char *recomp_import_name(uint32_t addr);
@@ -32,7 +33,6 @@ __thread int recomp_excl_valid;
 __thread uint64_t recomp_excl_val64;
 __thread uint32_t recomp_tpidruro;                      /* the guest thread's TLS pointer */
 extern uint32_t process_param;                          /* the program's process parameters (sysmem.c: sceKernelGetProcessParam) */
-char hle_last_format[1024];                             /* (the last formatted string: nothing fills it yet) */
 
 static uint32_t tls_template[3];   /* the program's: address, size, block size */
 static struct { uint32_t addr; char name[60]; } *exports;   /* every loaded library's exported functions */
@@ -140,18 +140,28 @@ static void stop(const char *why) {
 	exit(0);
 }
 
+/* the imports the host answers even when a loaded library exports them: the plain memory and string functions,
+ * faster here with the same result, and __tls_get_addr -- the host owns the threads and their thread-local blocks */
+static int host_preferred(const char *n) {
+	static const char *const fast[] = {"memcpy", "memmove", "memset", "memcmp", "memchr", "strlen", "strnlen", "strcmp",
+		"strncmp", "strcpy", "strncpy", "strcat", "strncat", "strchr", "strrchr", "strstr", "sceClibMemcpy", "sceClibMemset",
+		"sceClibMemmove", "sceClibMemcmp", "sceClibStrcmp", "sceClibStrncmp", "sceClibStrnlen", "__tls_get_addr", 0};
+	for (int i = 0; fast[i]; i++) if (!strcmp(fast[i], n)) return 1;
+	return 0;
+}
+
 /* an import's implementation, worked out once per stub: the library that exports it (as on the console), else
- * the host's system call. __tls_get_addr is the host's even with libc loaded: the host owns the threads and their
- * thread-local blocks. */
+ * the host's system call */
 typedef struct { uint32_t stub; GuestFn target; HleFn fn; int said; } Import;
 static Import *resolve(uint32_t stub, const char *name) {   /* (host_lock held) */
 	static Import imports[4096];
 	Import *e = &imports[(stub >> 1) & 4095];
 	if (e->stub == stub) return e;
+	HleFn fn = hle_find(name);
 	uint32_t t = 0;
-	if (strcmp(name, "__tls_get_addr"))
+	if (!(fn && host_preferred(name)))
 		for (uint32_t i = 0; i < nexports && !t; i++) if (!strcmp(exports[i].name, name)) t = exports[i].addr;
-	*e = (Import){stub, t ? guest_lookup(t & ~1u) : 0, hle_find(name), 0};
+	*e = (Import){stub, t ? guest_lookup(t & ~1u) : 0, fn, 0};
 	return e;
 }
 
@@ -196,11 +206,17 @@ int main(int argc, char **argv) {
 	 * is refused, reserve and commit pages on their first touch, as Nativ's platform_win32.c does */
 	recomp_mem = VirtualAlloc(0, 1ull << 32, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (!recomp_mem) die("can't get the 4 GiB of the Vita's address space (page file too small?)", "");
+	const char *slash = strrchr(argv[1], '/'), *back = strrchr(argv[1], 92);
+	if (back > slash) slash = back;
+	int dir = slash ? (int)(slash + 1 - argv[1]) : 0;   /* the image's folder, with its separator */
+	if (!getenv("RECOMP_FS")) {   /* the game's drives (io.c): <folder>/fs/app0 is the game, beside its image */
+		char fs[1024]; snprintf(fs, sizeof fs, "%.*sfs", dir, argv[1]);
+		_putenv_s("RECOMP_FS", fs);
+	}
+	settings_load(getenv("RECOMP_SETTINGS"));   /* settings.ini in the working directory (settings.h) */
 	load_image(argv[1], 1);
 	for (int i = 0; i < nmodules; i++) {   /* each library's image, beside the program's: <name>.img */
-		char path[1024]; const char *slash = strrchr(argv[1], '/'), *back = strrchr(argv[1], '\\');
-		if (back > slash) slash = back;
-		snprintf(path, sizeof path, "%.*s%s.img", slash ? (int)(slash + 1 - argv[1]) : 0, argv[1], modules[i].name);
+		char path[1024]; snprintf(path, sizeof path, "%.*s%s.img", dir, argv[1], modules[i].name);
 		load_image(path, 0);
 	}
 	uint32_t entry = strtoul(argv[2], 0, 16);

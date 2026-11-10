@@ -44,15 +44,34 @@ add_executable(abyss
     src/game/hooks.c
     src/host/main.c
     src/host/pending.c
+    src/kernel/apputil.c
+    src/kernel/fios.c
     src/kernel/hle.c
+    src/kernel/io.c
     src/kernel/kernel.c
+    src/kernel/libc.c
+    src/kernel/psarc.c
+    src/kernel/settings.c
     src/kernel/sysmem.c
     src/platform/platform.c
     src/platform/posix.c
 )
 set_target_properties(abyss PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
-target_include_directories(abyss PRIVATE src/kernel src/platform src/platform/posix)
-target_link_libraries(abyss PRIVATE abyssgame bcrypt)
+target_include_directories(abyss PRIVATE src/gfx src/host src/kernel src/platform src/platform/posix)
+# compat.h in front of every file: the POSIX file calls under Windows' names (src/platform/posix).
+target_compile_options(abyss PRIVATE /FIcompat.h)
+
+# zlib (zlib licence): the game's archives (PSARC) are deflated. Downloaded at configure time, pinned by version
+# and hash, linked statically.
+include(FetchContent)
+FetchContent_Declare(zlib
+    URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
+    URL_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
+)
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(zlib)
+target_include_directories(abyss PRIVATE "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}")
+target_link_libraries(abyss PRIVATE abyssgame bcrypt zlibstatic)
 target_compile_definitions(abyss PRIVATE _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
 
 # The first check: the libraries start, then the game, whose first act is to ask the kernel for its heaps
