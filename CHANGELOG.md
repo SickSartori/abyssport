@@ -14,3 +14,5 @@
   starts its worker threads and reaches the set-up of its graphics.
 - Files, Sony's FIOS over them, PSARC archives, saved data and settings: the game opens its data (`gamedata.bin`).
   The only calls left without an implementation at start-up are the graphics library's.
+- Sony's graphics library (GXM) and its GPU services, recompiled from the player's own firmware update file (3.74)
+  and loaded with the game: its graphics calls run Sony's code. The game goes on to set up its audio and input.

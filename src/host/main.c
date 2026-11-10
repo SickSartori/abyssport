@@ -106,7 +106,7 @@ static void rd(void *p, size_t n, FILE *f, const char *path) { if (fread(p, 1, n
 
 /* the image (the recompiler's mkimage): "VRIM", count, count x (address, size, has bytes, the bytes), then tagged
  * records: TLS, the program's thread-local template; PPRM, its process parameters; EXPT, a library's exported
- * functions; MSTA, its module_start. VARS (imported variables): none in this game or its two libraries */
+ * functions; MSTA, its module_start; VARS, the variables it imports */
 static void load_image(const char *path, int program) {
 	FILE *f = fopen(path, "rb");
 	if (!f) die("can't open ", path);
@@ -123,7 +123,14 @@ static void load_image(const char *path, int program) {
 		if (!memcmp(tag, "TLS", 4)) rd(program ? tls_template : h, 12, f, path);
 		else if (!memcmp(tag, "PPRM", 4)) rd(&process_param, 4, f, path);
 		else if (!memcmp(tag, "MSTA", 4)) { rd(&n, 4, f, path); if (nmodule_starts < 16) module_starts[nmodule_starts++] = n; }
-		else if (!memcmp(tag, "VARS", 4)) { rd(&n, 4, f, path); if (n) die("imported variables, which the host doesn't fill yet, in ", path); }
+		else if (!memcmp(tag, "VARS", 4)) {   /* imported variables: (slot address, name), filled by the part that owns each */
+			rd(&n, 4, f, path);
+			for (uint32_t i = 0; i < n; i++) {
+				struct { uint32_t addr; char name[60]; } v;
+				rd(&v, sizeof v, f, path); v.name[59] = 0;
+				hle_import_var(v.name, v.addr);
+			}
+		}
 		else if (!memcmp(tag, "EXPT", 4)) {
 			rd(&n, 4, f, path);
 			if (n > 65536 || !(exports = realloc(exports, (nexports + n) * sizeof *exports))) die("bad export table in ", path);
@@ -219,6 +226,7 @@ int main(int argc, char **argv) {
 		char path[1024]; snprintf(path, sizeof path, "%.*s%s.img", dir, argv[1], modules[i].name);
 		load_image(path, 0);
 	}
+	hle_import_vars_done();
 	uint32_t entry = strtoul(argv[2], 0, 16);
 	GuestFn start = recomp_lookup(entry & ~1u);
 	if (!start) die("not a recompiled function: ", argv[2]);

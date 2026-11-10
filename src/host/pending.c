@@ -29,3 +29,7 @@ void gfx_gpu_builds_stop(void) {}   /* (the shader workers, stopped before exit:
 /* the overlay (overlay.h): no window yet, so no notice is shown and a save dialog answers by itself (apputil.c) */
 void overlay_toast_titled(const char *title, const char *body, double seconds) { (void)title; (void)body; (void)seconds; }
 int overlay_draws_hud(void) { return 0; }
+
+/* libgxm's sceGxmShaderPatcherRegisterProgram, hooked when the library is recompiled: Nativ's renderer notes each
+ * program the game registers there (its shader recipes). Nothing to note without a renderer */
+void recomp_hook_gxm_register(Cpu *c) { (void)c; }
