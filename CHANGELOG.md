@@ -40,3 +40,5 @@
   Enhanced and Custom styles, picture, effects, game and audio settings, the keyboard's keys and the mouse's buttons,
   and a page on how the console's touch screen, rear pad, tilt and camera are played on a PC. In Italian and English.
   Play starts the game and the launcher comes back when it ends.
+- The launcher's "How to play" page shows each of the console's inputs as a small moving scene: the keys, mouse or
+  controller on one side, the console reacting on the other.

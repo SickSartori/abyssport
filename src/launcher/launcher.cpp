@@ -339,6 +339,7 @@ private:
     void page_settings();
     void page_controls();
     void page_about();
+    void how_page(float now);
     void style_row();
     int style() const;
     void apply_style(int style);
@@ -372,6 +373,8 @@ private:
     float hover_since_ = 0;
     bool hover_armed_ = false;
     int rebinding_ = -1, cancel_frame_ = -1;
+    int how_item_ = 0;                             // "how to play": the scene shown
+    float how_since_ = 0, how_hold_until_ = 0;     // when it began; until when the player's choice stays
     bool done_ = false, play_ = false, status_keeps_focus_ = false;
     bool row_marked_ = false;
     ImVec2 row_a_{}, row_b_{};
@@ -1164,16 +1167,249 @@ void Launcher::page_controls() {
         row(t.gyro, t.gyro_detail);
         choice("gyro", "1", off_on, no_yes, 2);
     } else {
-        text(body_, px(18), ImVec2(origin_.x, origin_.y + cursor_), kDim, t.how_lead, panel_width_);
-        cursor_ += measure(body_, px(18), t.how_lead, panel_width_).y + px(14);
-        for (const auto& item : t.how) {
-            const float wrap = panel_width_ - px(14);
-            skewed_rect(list_, ImVec2(origin_.x, origin_.y + cursor_ + px(3)), ImVec2(origin_.x + px(5), origin_.y + cursor_ + px(21)), kGold, kGold);
-            text(body_bold_, px(19), ImVec2(origin_.x + px(14), origin_.y + cursor_), kInk, item[0]);
-            text(body_, px(17), ImVec2(origin_.x + px(14), origin_.y + cursor_ + px(24)), kDim, item[1], wrap);
-            cursor_ += px(24) + measure(body_, px(17), item[1], wrap).y + px(12);
+        how_page(static_cast<float>(ImGui::GetTime()));
+    }
+}
+
+// "How to play": each of the console's inputs as a small moving scene -- what the player does on the left (keys,
+// mouse or controller), what the console sees on the right -- with its name and a line of explanation under it. The
+// scenes follow one another by themselves; pointing at a name, or choosing it, shows that one.
+void Launcher::how_page(float now) {
+    const Texts& t = T();
+    constexpr int kCount = 9;
+    constexpr float kLength = 3.6f;  // seconds a scene's loop lasts
+    text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_), kDim, t.how_lead, panel_width_);
+    cursor_ += measure(body_, px(17), t.how_lead, panel_width_).y + px(12);
+    if (now >= how_hold_until_ && now - how_since_ >= kLength * 2) {  // two loops each, then the next
+        how_item_ = (how_item_ + 1) % kCount;
+        how_since_ = now;
+    }
+    const float p = std::fmod(std::max(0.0f, now - how_since_), kLength) / kLength;  // 0..1 through the loop
+    const float turn = p * 6.2831853f;
+
+    // The stage.
+    const ImVec2 a(origin_.x, origin_.y + cursor_), b(origin_.x + panel_width_, a.y + px(200));
+    list_->AddRectFilled(a, b, fade(IM_COL32(255, 255, 255, 10)));
+    list_->AddRect(a, b, fade(IM_COL32(255, 255, 255, 26)), 0, 0, px(1));
+    const ImVec2 left(a.x + px(130), (a.y + b.y) / 2), right(b.x - px(180), (a.y + b.y) / 2);
+    const ImU32 dark = IM_COL32(34, 32, 30, 255), edge = IM_COL32(255, 255, 255, 80), screen_colour = IM_COL32(12, 22, 30, 255);
+
+    // What the scenes are drawn with.
+    const auto key = [&](ImVec2 c, const char* label, bool down) {
+        const ImVec2 size = measure(body_bold_, px(18), label);
+        const float w = std::max(px(46), size.x + px(22)), h = px(42), sink = down ? px(3) : 0;
+        const ImVec2 ka(c.x - w / 2, c.y - h / 2 + sink), kb(c.x + w / 2, c.y + h / 2 + sink);
+        list_->AddRectFilled(ImVec2(ka.x, ka.y + px(4) - sink), ImVec2(kb.x, kb.y + px(4) - sink), fade(IM_COL32(0, 0, 0, 120)), px(7));
+        list_->AddRectFilled(ka, kb, fade(down ? kGold : dark), px(7));
+        list_->AddRect(ka, kb, fade(down ? IM_COL32(255, 232, 170, 255) : edge), px(7), 0, px(1.5f));
+        text(body_bold_, px(18), ImVec2(c.x - size.x / 2, c.y - size.y / 2 + sink), down ? IM_COL32(18, 14, 6, 255) : kInk, label);
+    };
+    const auto mouse = [&](ImVec2 c, bool left_down, bool right_down) {
+        const float w = px(54), h = px(84);
+        const ImVec2 ma(c.x - w / 2, c.y - h / 2), mb(c.x + w / 2, c.y + h / 2);
+        list_->AddRectFilled(ma, mb, fade(dark), px(24));
+        if (left_down) list_->AddRectFilled(ma, ImVec2(c.x, ma.y + h * 0.42f), fade(kGold), px(24), ImDrawFlags_RoundCornersTopLeft);
+        if (right_down) list_->AddRectFilled(ImVec2(c.x, ma.y), ImVec2(mb.x, ma.y + h * 0.42f), fade(kAmber), px(24), ImDrawFlags_RoundCornersTopRight);
+        list_->AddRect(ma, mb, fade(edge), px(24), 0, px(1.5f));
+        list_->AddLine(ImVec2(c.x, ma.y), ImVec2(c.x, ma.y + h * 0.42f), fade(edge), px(1.5f));
+        list_->AddLine(ImVec2(ma.x, ma.y + h * 0.42f), ImVec2(mb.x, ma.y + h * 0.42f), fade(edge), px(1.5f));
+    };
+    // The console, level or tilted by `angle`; `rear`: seen from the back, its touch pad where the screen would be.
+    // Returns the middle of its screen (or pad); the screen is 2 x half wide and 2 x half_h high.
+    const float half = px(84), half_h = px(47);
+    const auto rotated = [&](ImVec2 c, ImVec2 offset, float angle) {
+        const float cs = std::cos(angle), sn = std::sin(angle);
+        return ImVec2(c.x + offset.x * cs - offset.y * sn, c.y + offset.x * sn + offset.y * cs);
+    };
+    const auto console = [&](ImVec2 c, float angle, bool rear) {
+        const float bw = px(150), bh = px(62);
+        const auto box = [&](float x0, float y0, float x1, float y1, ImU32 colour) {
+            list_->AddQuadFilled(rotated(c, ImVec2(x0, y0), angle), rotated(c, ImVec2(x1, y0), angle), rotated(c, ImVec2(x1, y1), angle),
+                                 rotated(c, ImVec2(x0, y1), angle), fade(colour));
+        };
+        box(-bw + bh, -bh, bw - bh, bh, IM_COL32(26, 26, 30, 255));
+        list_->AddCircleFilled(rotated(c, ImVec2(-bw + bh, 0), angle), bh, fade(IM_COL32(26, 26, 30, 255)), 32);
+        list_->AddCircleFilled(rotated(c, ImVec2(bw - bh, 0), angle), bh, fade(IM_COL32(26, 26, 30, 255)), 32);
+        if (rear) {
+            box(-half, -half_h, half, half_h, IM_COL32(40, 40, 46, 255));
+            for (int i = 0; i < 9; ++i) {  // the rear pad's pattern
+                for (int j = 0; j < 5; ++j) {
+                    list_->AddCircleFilled(rotated(c, ImVec2(-half + px(18) * static_cast<float>(i) + px(12), -half_h + px(18) * static_cast<float>(j) + px(11)), angle),
+                                           px(1.6f), fade(IM_COL32(255, 255, 255, 50)));
+                }
+            }
+        } else {
+            box(-half, -half_h, half, half_h, screen_colour);
+            list_->AddCircle(rotated(c, ImVec2(-bw + px(26), px(22)), angle), px(11), fade(edge), 0, px(1.5f));  // sticks
+            list_->AddCircle(rotated(c, ImVec2(bw - px(26), px(22)), angle), px(11), fade(edge), 0, px(1.5f));
+            list_->AddCircleFilled(rotated(c, ImVec2(-bw + px(30), -px(16)), angle), px(9), fade(IM_COL32(255, 255, 255, 40)));  // d-pad
+            for (int i = 0; i < 4; ++i) {  // the four buttons
+                const ImVec2 at(bw - px(30) + px(9) * (i == 1 ? 1.0f : i == 3 ? -1.0f : 0.0f), -px(16) + px(9) * (i == 0 ? -1.0f : i == 2 ? 1.0f : 0.0f));
+                list_->AddCircleFilled(rotated(c, at, angle), px(3.2f), fade(IM_COL32(255, 255, 255, 110)));
+            }
+        }
+        return c;
+    };
+    const auto finger = [&](ImVec2 at, bool down, ImU32 colour) {
+        list_->AddCircleFilled(at, px(down ? 7 : 9), fade(colour, down ? 1.0f : 0.55f));
+        list_->AddCircle(at, px(down ? 7 : 9), fade(IM_COL32_WHITE, 0.8f), 0, px(1.5f));
+    };
+    const auto ripple = [&](ImVec2 at, float q, ImU32 colour) {
+        if (q > 0 && q < 1) list_->AddCircle(at, px(8) + px(26) * q, fade(colour, 1 - q), 0, px(2.5f));
+    };
+    const auto controller = [&](ImVec2 c, bool bumper, ImVec2 stick) {
+        const float w = px(74), h = px(40);
+        if (bumper) list_->AddRectFilled(ImVec2(c.x - w + px(8), c.y - h - px(9)), ImVec2(c.x - w + px(52), c.y - h + px(4)), fade(kGold), px(6));
+        list_->AddRectFilled(ImVec2(c.x - w, c.y - h), ImVec2(c.x + w, c.y + h), fade(dark), px(24));
+        list_->AddRect(ImVec2(c.x - w, c.y - h), ImVec2(c.x + w, c.y + h), fade(edge), px(24), 0, px(1.5f));
+        list_->AddCircle(ImVec2(c.x - px(34), c.y + px(4)), px(15), fade(edge), 0, px(1.5f));
+        list_->AddCircle(ImVec2(c.x + px(34), c.y + px(4)), px(15), fade(edge), 0, px(1.5f));
+        list_->AddCircleFilled(ImVec2(c.x - px(34), c.y + px(4)), px(8), fade(kChrome, 0.6f));
+        list_->AddCircleFilled(ImVec2(c.x + px(34) + stick.x * px(8), c.y + px(4) + stick.y * px(8)), px(8), fade(kGold));
+    };
+    const auto arrow = [&](ImVec2 from, ImVec2 to, ImU32 colour) {
+        list_->AddLine(from, to, fade(colour), px(2.5f));
+        const float length = std::sqrt((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y));
+        if (length < 1) return;
+        const ImVec2 d((to.x - from.x) / length, (to.y - from.y) / length);
+        list_->AddTriangleFilled(to, ImVec2(to.x - d.x * px(10) - d.y * px(6), to.y - d.y * px(10) + d.x * px(6)),
+                                 ImVec2(to.x - d.x * px(10) + d.y * px(6), to.y - d.y * px(10) - d.x * px(6)), fade(colour));
+    };
+    const float span = std::clamp((p - 0.15f) / 0.6f, 0.0f, 1.0f);  // a movement in the loop's middle
+    const float eased = ease_out(span);
+
+    list_->PushClipRect(a, b, true);
+    switch (how_item_) {
+        case 0: {  // looking around: the mouse moves, the view turns
+            const float sway = std::sin(turn);
+            mouse(ImVec2(left.x + px(34) * sway, left.y), false, false);
+            arrow(ImVec2(left.x - px(64), left.y + px(62)), ImVec2(left.x - px(92), left.y + px(62)), kDim);
+            arrow(ImVec2(left.x + px(64), left.y + px(62)), ImVec2(left.x + px(92), left.y + px(62)), kDim);
+            const ImVec2 c = console(right, 0, false);
+            list_->PushClipRect(ImVec2(c.x - half, c.y - half_h), ImVec2(c.x + half, c.y + half_h), true);
+            const float shift = -sway * px(46);
+            for (int i = -2; i <= 3; ++i) {  // a skyline that slides the other way
+                const float x = c.x + shift + px(62) * static_cast<float>(i);
+                const float top = c.y - px(i % 2 ? 26 : 8);
+                list_->AddTriangleFilled(ImVec2(x - px(44), c.y + half_h), ImVec2(x, top), ImVec2(x + px(44), c.y + half_h), fade(i % 2 ? IM_COL32(40, 78, 62, 255) : IM_COL32(58, 104, 76, 255)));
+            }
+            list_->AddCircleFilled(ImVec2(c.x + shift * 0.4f + px(36), c.y - px(26)), px(9), fade(IM_COL32(255, 214, 140, 255)));
+            list_->PopClipRect();
+            break;
+        }
+        case 1:    // touching the screen: Alt, the cursor as a finger, the left button
+        case 2: {  // the rear pad: Alt and the right button
+            const bool rear = how_item_ == 2;
+            const bool pressed = p > 0.55f && p < 0.9f;
+            key(ImVec2(left.x - px(58), left.y), "Alt", true);
+            mouse(ImVec2(left.x + px(40), left.y), pressed && !rear, pressed && rear);
+            const ImVec2 c = console(right, 0, rear);
+            const ImVec2 from(c.x - half + px(14), c.y + half_h - px(12)), to(c.x + px(22), c.y - px(8));
+            const float q = ease_out(std::clamp(p / 0.5f, 0.0f, 1.0f));
+            const ImVec2 at(from.x + (to.x - from.x) * q, from.y + (to.y - from.y) * q);
+            ripple(at, (p - 0.55f) / 0.35f, rear ? kAmber : kGold);
+            finger(at, pressed, rear ? kAmber : kGold);
+            break;
+        }
+        case 3: {  // rubbing, cutting, drawing: Alt held, the left button down, the cursor dragged
+            const bool pressed = p > 0.12f && p < 0.8f;
+            key(ImVec2(left.x - px(58), left.y), "Alt", true);
+            mouse(ImVec2(left.x + px(40) + px(14) * std::sin(turn * 3), left.y), pressed, false);
+            const ImVec2 c = console(right, 0, false);
+            ImVec2 last(c.x - half + px(16), c.y);
+            const int steps = static_cast<int>(48 * span);
+            for (int i = 1; i <= steps; ++i) {
+                const float v = static_cast<float>(i) / 48;
+                const ImVec2 point(c.x - half + px(16) + (2 * half - px(32)) * v, c.y + px(26) * std::sin(v * 18.85f));
+                list_->AddLine(last, point, fade(kGold), px(3));
+                last = point;
+            }
+            finger(last, pressed, kGold);
+            break;
+        }
+        case 4: {  // swiping: the left button held and dragged, the mouse still the look otherwise
+            const bool pressed = p > 0.15f && p < 0.75f;
+            mouse(ImVec2(left.x, left.y + px(26) - px(52) * eased), pressed, false);
+            const ImVec2 c = console(right, 0, false);
+            const ImVec2 from(c.x, c.y + half_h - px(12)), to(c.x, c.y + half_h - px(12) - (2 * half_h - px(24)) * eased);
+            if (pressed) arrow(from, to, kGold);
+            finger(to, pressed, kGold);
+            break;
+        }
+        case 5: {  // tilting: A and D, or the controller's own gyroscope
+            const float lean = std::sin(turn);
+            key(ImVec2(left.x - px(34), left.y), "A", lean < -0.2f);
+            key(ImVec2(left.x + px(34), left.y), "D", lean > 0.2f);
+            console(right, 0.38f * lean, false);
+            break;
+        }
+        case 6: {  // the camera held to the light: F7 turns the lamp on and off
+            const bool on = p > 0.3f && p < 0.8f;
+            key(left, "F7", (p > 0.3f && p < 0.4f) || (p > 0.8f && p < 0.9f));
+            const ImVec2 c = console(right, 0, false);
+            const float glow = anim(ImGui::GetID("##lamp"), on, 6);
+            list_->AddCircleFilled(c, px(18) + px(26) * glow, fade(IM_COL32(255, 226, 150, 255), 0.25f * glow), 32);
+            list_->AddCircleFilled(c, px(12) + px(8) * glow, fade(IM_COL32(255, 240, 200, 255), 0.25f + 0.75f * glow), 32);
+            break;
+        }
+        case 7: {  // a controller: a bumper held, the stick moves the touch cursor
+            const ImVec2 stick(std::cos(turn), std::sin(turn));
+            controller(left, true, stick);
+            const ImVec2 c = console(right, 0, false);
+            finger(ImVec2(c.x + stick.x * px(46), c.y + stick.y * px(24)), false, kGold);
+            break;
+        }
+        default: {  // the port's menu: F10
+            key(left, "F10", p > 0.12f && p < 0.24f);
+            const ImVec2 c = console(right, 0, false);
+            const float open = ease_out(std::clamp((p - 0.2f) / 0.25f, 0.0f, 1.0f)) * (p < 0.9f ? 1.0f : 0.0f);
+            if (open > 0.01f) {
+                const ImVec2 ma(c.x - half + px(10), c.y - half_h + px(8)), mb(ma.x + (2 * half - px(20)) * open, c.y + half_h - px(8));
+                list_->AddRectFilled(ma, mb, fade(IM_COL32(14, 12, 10, 235)));
+                list_->AddRectFilled(ma, ImVec2(mb.x, ma.y + px(3)), fade(kGold));
+                for (int i = 0; i < 4 && open > 0.8f; ++i) {
+                    list_->AddRectFilled(ImVec2(ma.x + px(10), ma.y + px(14) + px(15) * static_cast<float>(i)),
+                                         ImVec2(ma.x + px(i == 1 ? 110 : 80), ma.y + px(21) + px(15) * static_cast<float>(i)), fade(i == 1 ? kGold : IM_COL32(255, 255, 255, 70)));
+                }
+            }
+            break;
         }
     }
+    list_->PopClipRect();
+    arrow(ImVec2(a.x + px(250), (a.y + b.y) / 2), ImVec2(a.x + px(282), (a.y + b.y) / 2), IM_COL32(255, 255, 255, 60));
+    cursor_ += px(200) + px(12);
+
+    // The scene's name and its explanation.
+    text(body_bold_, px(21), ImVec2(origin_.x, origin_.y + cursor_), kInk, t.how[how_item_][0]);
+    text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + px(28)), kDim, t.how[how_item_][1], panel_width_);
+    cursor_ += px(28) + px(48);
+
+    // Every scene by name, three to a line: pointing at one shows it and holds it a while.
+    const float cell = panel_width_ / 3, line = px(38);
+    for (int i = 0; i < kCount; ++i) {
+        const ImVec2 at(origin_.x + cell * static_cast<float>(i % 3), origin_.y + cursor_ + line * static_cast<float>(i / 3));
+        ImGui::SetCursorScreenPos(at);
+        ImGui::PushID(200 + i);
+        if (i == how_item_) claim_focus();
+        const bool pressed = ImGui::InvisibleButton("##how", ImVec2(cell - px(8), line - px(6)), kNavigable);
+        const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride), selected = nav_selected();
+        const float hot = anim(ImGui::GetItemID(), hovered || selected);
+        const float on = anim(ImGui::GetItemID() + 1, i == how_item_);
+        if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        ImGui::PopID();
+        if ((pressed || hovered || selected) && i != how_item_) {
+            how_item_ = i;
+            how_since_ = now;
+        }
+        if (pressed || hovered || selected) how_hold_until_ = now + 12;
+        const ImVec2 box_b(at.x + cell - px(8), at.y + line - px(6));
+        list_->AddRectFilled(at, box_b, fade(mix(IM_COL32(255, 255, 255, 14), kGold, on * 0.9f + hot * 0.1f)));
+        if (on > 0.5f) list_->AddRectFilled(at, ImVec2(at.x + (box_b.x - at.x) * std::min(1.0f, (now - how_since_) / (kLength * 2)), at.y + px(2)), fade(IM_COL32_WHITE, 0.7f));
+        list_->PushClipRect(at, box_b, true);
+        text(body_bold_, px(16), ImVec2(at.x + px(10), at.y + px(6)), mix(kInk, IM_COL32(18, 14, 6, 255), on), t.how[i][0]);
+        list_->PopClipRect();
+    }
+    cursor_ += line * 3 + px(4);
 }
 
 void Launcher::page_about() {
@@ -1543,6 +1779,11 @@ int Launcher::run() {
     const char* shot = std::getenv("ABYSS_LAUNCHER_SHOT");
     if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 3));
     if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);
+    if (const char* item = std::getenv("ABYSS_LAUNCHER_HOW")) {  // a scene of "how to play", held, 1.6 s into its loop at the shot
+        how_item_ = std::clamp(std::atoi(item), 0, 8);
+        how_hold_until_ = 1e9f;
+        how_since_ = 0.8f;
+    }
     SDL_GPUTexture* offscreen = nullptr;
     Uint64 last = SDL_GetPerformanceCounter();
     while (!done_) {
