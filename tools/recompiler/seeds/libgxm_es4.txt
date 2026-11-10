@@ -1,0 +1,3 @@
+# Adapted from Project Nativ (https://github.com/TheLostPantheon/nativ), recompiler/seeds/libgxm_es4.txt at 4b1c428:
+# GNU General Public License, version 2 or (at your option) any later version.
+0x264c arm

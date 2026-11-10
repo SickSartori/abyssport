@@ -11,8 +11,20 @@ library keeps its own licence, whose text travels with it.
 | [Project Nativ](https://github.com/TheLostPantheon/nativ) at `4b1c428` | GPL 2.0 or later | Its runtime, file by file, each with a header naming the file it comes from: `src/core/` (kernel, memory, files, FIOS, PSARC, saved data, settings, the host), `src/gfx/` (the GPU boundary, the renderers, the shader translator), `src/audio/`, `src/input/`, `src/media/`, `src/ui/` (window, overlay), `src/debug/`, `src/platform/platform_win32.c`. `src/recomp/rt.h`, the recompiled code's header. `src/game/hooks.c`, its patches for Golden Abyss (`packs/PCSA00029/hooks.c`). `src/platform/posix/compat.h` and the file calls of `src/platform/posix.c` (from `runtime/platform/win32_compat.*`). `res/shaders.txt`, its shader recipes for the game (`packs/PCSA00029/shaders.txt`: no game bytes in it). The network part is not taken: `src/core/net.c` stands in for it. |
 | [Vita3K](https://github.com/Vita3K/Vita3K) | GPL 2.0 or later | (nothing yet) |
 
-Not in the repository, but used to make the game's code from the player's own copy: Project Nativ's recompiler,
-decrypter and pipeline (Python), run from a checkout of it.
+Also from Project Nativ, the tools that make the game's code from the player's own copy (Python, each file with a
+line naming its source): `tools/recompiler/` (the analyser, the ARM to C recompiler, the memory images),
+`tools/decrypt/` (the decrypter of games and firmware files) and `tools/PCSA00029.toml` (the game's facts and the
+addresses its patches hook). `tools/make_game.py`, which runs them, is abyssport's.
+
+The decrypter is itself ported from other projects, which Project Nativ credits:
+
+| Part | Ported from | Licence |
+|---|---|---|
+| `tools/decrypt/vitadecrypt/` `keys.py`, `sce_self.py`, `pkg.py`, `pup.py`, `sfo.py` | [Vita3K](https://github.com/Vita3K/Vita3K)'s `packages/` | GPL 2.0 or later |
+| the key values and SELF/PUP handling Vita3K credits | [TeamMolecule's sceutils](https://github.com/TeamMolecule/sceutils) | MIT |
+| the PKG format Vita3K credits | [pkg2zip](https://github.com/mmozeiko/pkg2zip) | Unlicense |
+| `tools/decrypt/vitadecrypt/pfs.py` | [psvpfstools](https://github.com/motoharu-gosuto/psvpfstools) and Vita3K's [psvpfsparser](https://github.com/Vita3K/psvpfsparser) | none published |
+| `tools/decrypt/nidmap.tsv` (function names by NID) | [VitaSDK's NID database](https://github.com/vitasdk/vita-headers) | MIT |
 
 ## In this repository
 
