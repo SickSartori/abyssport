@@ -6,7 +6,9 @@ Windows program, with a runtime that stands in for the Vita's system and hardwar
 Nothing of the game ships. You need your own copy of the game, US release PCSA00029 version 1.00, and the Vita
 firmware update file (PUP).
 
-Status: early. The game starts and draws its title screen; nothing has been played through yet.
+Status: early. The game starts, a new campaign begins and the prologue plays; nothing has been played through yet.
+
+Controls: [docs/controls.md](docs/controls.md).
 
 ## Credits
 
