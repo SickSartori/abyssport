@@ -1,0 +1,20 @@
+# Build output
+/build/
+/out/
+/.vs/
+
+# Reference sources (Vita3K, Nativ): read and adapted from, not built yet
+/external/
+
+# Game data: never commit it, every user supplies their own copy and firmware
+/game/
+*.pup
+*.PUP
+*.vpk
+*.pkg
+*.self
+*.elf
+*.bin
+
+# Runtime logs
+*.log
