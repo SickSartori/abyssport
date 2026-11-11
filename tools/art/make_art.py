@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """abyssport's own artwork, drawn from code: the icon (res/abyssport.ico, res/launcher/icon.png) and the emblem beside
 the port's name in the launcher (res/launcher/emblem.png). The launcher's backgrounds (res/launcher/bg_*.jpg) are not
-made here: they were generated with Magnific (THIRD_PARTY.md).
+made here.
 
   python tools/art/make_art.py
 

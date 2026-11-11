@@ -31,8 +31,8 @@
   makes the game on your PC (Prepare: decrypted, recompiled, compiled by `tools/build_game.py`), with its progress
   on screen; Cancel or closing the launcher stops it, and a second run picks up the files already compiled.
 - abyssport's own icon and emblem, drawn from code by `tools/art/make_art.py`, and four backgrounds for the launcher
-  before there is a copy of the game (a temple at dawn, a chasm in the jungle, a cave, ruins by moonlight), generated
-  with Magnific. Nothing in them comes from the game.
+  before there is a copy of the game (a temple at dawn, a chasm in the jungle, a cave, ruins by moonlight). Nothing
+  in them comes from the game.
 - `abyss.log`: what the game prints, beside its files, for bug reports.
 - Paths with accented letters work (UTF-8 as the programs' code page).
 - `docs/controls.md`: the controls, key by key. F1 opens the in-game menu, F10 cycles the performance display.

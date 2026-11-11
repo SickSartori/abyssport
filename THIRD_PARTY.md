@@ -64,18 +64,6 @@ FFmpeg is not linked in: its libraries are used as they are built, as DLLs besid
 | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) | 20261104 (Clang 23.1.5) | Apache 2.0 with LLVM exceptions; mingw-w64's runtime under its own permissive licences | The compiler; its C and C++ libraries and winpthreads are linked into the program |
 | [Ninja](https://ninja-build.org) | 1.13.2 | Apache 2.0 | Runs the build |
 
-## Artwork
-
-The launcher's backgrounds (`res/launcher/bg_*.jpg`) were generated for abyssport with
-[Magnific](https://www.magnific.ai) (Magnific One) from text alone, and resized; no image of the game was used. The
-icon and the emblem are drawn from code by `tools/art/make_art.py`. The controller in "How to play"
-(`res/launcher/pad.png`) is a controller drawing from Magnific's stock, recoloured and cut by `tools/art/make_pad.py`;
-the launcher draws the buttons' symbols over it.
-
-The backgrounds and the controller are used under the project owner's Magnific Pro licence: commercial use, changes
-allowed, no attribution required. The licence does not allow handing out the original files, so only these modified
-images are in the repository and the release, never the downloaded SVG.
-
 ## In the release
 
 `tools/make_package.py` puts these in the release, pinned by version and hash, with their licences in `licenses/`:
