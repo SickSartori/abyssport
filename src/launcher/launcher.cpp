@@ -129,9 +129,9 @@ const Texts kItalian = {
       "Con Alt premuto, il pulsante destro tocca il retro della console.",
       "Con Alt premuto trascina il cursore. Le forme disegnate col mouse sono accettate con più tolleranza.",
       "Quando il gioco chiede di scorrere, trascina col pulsante sinistro, anche a mouse catturato.",
-      "Su travi e scivoli tieni A o D: la console si inclina da quel lato e torna dritta quando lasci.",
+      "Su travi e scivoli tieni {ML} o {MR}: la console si inclina da quel lato e torna dritta quando lasci.",
       "F7 accende e spegne la lampada che il gioco vede con la fotocamera posteriore.",
-      "Pulsante destro per mirare, sinistro per sparare. Si cambiano nella scheda Mouse e controller.",
+      "Per mirare: {AIM}. Per sparare: {FIRE}. Si cambiano nelle schede Tastiera e Mouse e controller.",
       "F1 apre impostazioni e comandi durante il gioco. F2 cambia risoluzione, F4 l'FSR."},
      {"Levetta destra.",
       "Tocca il touchpad: è lo schermo della console. Oppure tieni {T}, muovi il cursore con una levetta e premi Croce.",
@@ -209,9 +209,9 @@ const Texts kEnglish = {
       "With Alt held, the right button touches the back of the console.",
       "With Alt held, drag the cursor. Shapes drawn with the mouse are accepted more easily.",
       "When the game asks for a swipe, drag with the left button, even with the mouse captured.",
-      "On beams and slides hold A or D: the console tilts that way and comes level when you let go.",
+      "On beams and slides hold {ML} or {MR}: the console tilts that way and comes level when you let go.",
       "F7 turns on and off the lamp the game sees through the rear camera.",
-      "Right button to aim, left to fire. They change in the Mouse and controller tab.",
+      "To aim: {AIM}. To fire: {FIRE}. They change in the Keyboard and the Mouse and controller tabs.",
       "F1 opens settings and controls during the game. F2 changes resolution, F4 FSR."},
      {"Right stick.",
       "Touch the touchpad: it is the console's screen. Or hold {T}, move the cursor with a stick and press Cross.",
@@ -1829,8 +1829,8 @@ void Launcher::how_page(float now) {
         case 5: {  // tilting: A and D, the DualSense itself, or the left stick
             const float lean = std::sin(turn);
             if (kbm) {
-                key(ImVec2(left.x - px(34), left.y), "A", lean < -0.2f);
-                key(ImVec2(left.x + px(34), left.y), "D", lean > 0.2f);
+                key(ImVec2(left.x - px(40), left.y), move_left.c_str(), lean < -0.2f);
+                key(ImVec2(left.x + px(40), left.y), move_right.c_str(), lean > 0.2f);
             } else if (sony) {
                 pose.tilt = 0.38f * lean;
             } else {
@@ -1852,8 +1852,27 @@ void Launcher::how_page(float now) {
         case 7: {  // aiming and firing: the sight closes in while aiming, a flash on each shot
             const bool aiming = p > 0.15f && p < 0.9f;
             const bool firing = (p > 0.45f && p < 0.52f) || (p > 0.65f && p < 0.72f);
-            if (kbm) mouse(left, firing, aiming);
-            else {
+            if (kbm) {   // the mouse's left and right buttons where they hold L or R; a key cap for the rest
+                static const char* const kExtra[5] = {"", "", "M3", "M4", "M5"};   // (middle and side buttons)
+                const auto cap = [&](int which) {   // 0 aim, 1 fire: its key's or button's name
+                    const int button = which ? fire_button : aim_button;
+                    return button >= 2 ? std::string(kExtra[button]) : which ? fire_key : aim_key;
+                };
+                const bool aim_on_mouse = aim_button == 0 || aim_button == 1, fire_on_mouse = fire_button == 0 || fire_button == 1;
+                std::vector<int> caps;
+                if (!aim_on_mouse) caps.push_back(0);
+                if (!fire_on_mouse) caps.push_back(1);
+                const bool any_mouse = aim_on_mouse || fire_on_mouse;
+                float x = left.x - (any_mouse ? px(40) : px(40) * static_cast<float>(caps.size() - 1));
+                for (const int which : caps) {
+                    key(ImVec2(x, left.y), cap(which).c_str(), which ? firing : aiming);
+                    x += px(80);
+                }
+                if (any_mouse) {
+                    mouse(ImVec2(caps.empty() ? left.x : left.x + px(46), left.y), (aim_button == 0 && aiming) || (fire_button == 0 && firing),
+                          (aim_button == 1 && aiming) || (fire_button == 1 && firing));
+                }
+            } else {
                 (bumpers ? pose.l1 : pose.l2) = aiming;
                 (bumpers ? pose.r1 : pose.r2) = firing;
             }
@@ -1896,7 +1915,14 @@ void Launcher::how_page(float now) {
     const char* const* n = names[sony ? 0 : 1];
     const std::pair<const char*, const char*> marks[] = {{"{TR}", bumpers ? n[3] : n[1]}, {"{T}", bumpers ? n[2] : n[0]},
                                                          {"{A}", bumpers ? n[0] : n[2]}, {"{F}", bumpers ? n[1] : n[3]}};
+    // keyboard and mouse: the keys and buttons set on the other tabs
+    const std::string aim_name = aim_button >= 0 ? t.mouse_buttons[aim_button] : aim_key.empty() ? t.none : aim_key;
+    const std::string fire_name = fire_button >= 0 ? t.mouse_buttons[fire_button] : fire_key.empty() ? t.none : fire_key;
+    const std::pair<const char*, std::string> kbm_marks[] = {{"{ML}", move_left}, {"{MR}", move_right}, {"{AIM}", aim_name}, {"{FIRE}", fire_name}};
     for (const auto& [mark, name] : marks) {
+        for (size_t at; (at = explanation.find(mark)) != std::string::npos;) explanation.replace(at, std::strlen(mark), name);
+    }
+    for (const auto& [mark, name] : kbm_marks) {
         for (size_t at; (at = explanation.find(mark)) != std::string::npos;) explanation.replace(at, std::strlen(mark), name);
     }
     text(body_bold_, px(21), ImVec2(origin_.x, origin_.y + cursor_), kInk, t.how_titles[how_item_]);
