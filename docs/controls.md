@@ -4,7 +4,9 @@ Golden Abyss was made for a console with two sticks, a touch screen, a touch pad
 camera. This page says how each of those is played on a PC, as the program does it today. It describes the code
 as it is, taken from Project Nativ: none of it has been played through in abyssport yet.
 
-The in-game menu (F10) has a Controls page where every key can be changed.
+The launcher (`abyssport.exe`) has a Controls page where every key and mouse button can be changed, and a "How to
+play" tab that shows each of the actions below as a small moving scene. The in-game menu (F10) has the same
+settings.
 
 ## Keyboard and mouse or controller
 
@@ -76,7 +78,3 @@ Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map
 | F7 | The rear camera's lamp, for the hold-it-to-the-light puzzles |
 | F8 | The experimental raw mouse look |
 | F12 | Saves a capture of the frame's graphics |
-
-## Not there yet
-
-- There is no launcher: settings are changed in the in-game menu or in `settings.ini`.
