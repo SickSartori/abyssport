@@ -77,8 +77,10 @@ struct Texts {
     const char *input_mode, *input_mode_detail, *input_names[3];
     const char *mouse_sens, *mouse_invert, *shoulders, *shoulders_detail, *shoulder_names[2], *gyro, *gyro_detail;
     const char *mouse_lead, *mouse_buttons[5];
-    const char *how_lead;
-    const char *how[9][2];
+    const char *how_lead, *how_devices[3];
+    // "How to play": the scenes' names, and what each says for keyboard and mouse, a DualSense, an Xbox controller.
+    // {T} {TR}: what holds the front / rear touch cursor; {A} {F}: aim, fire (they swap with "L and R buttons")
+    const char *how_titles[9], *how_text[3][9];
     const char *actions[16];
     const char *about_lead, *version, *licence, *licence_text, *credits, *credits_text, *folder, *open_saves;
     const char *bar_game, *bar_game_ok, *bar_game_none, *bar_pad, *bar_pad_on, *bar_pad_off, *bar_version;
@@ -118,16 +120,37 @@ const Texts kItalian = {
     {"Grilletti", "Dorsali"}, "Giroscopio del controller", "DualShock 4, DualSense e Switch Pro: inclinano come la console",
     "Con il mouse catturato i suoi pulsanti sono azioni. Clic per cambiare, clic destro per tornare indietro.",
     {"Pulsante sinistro", "Pulsante destro", "Pulsante centrale", "Laterale 1", "Laterale 2"},
-    "Il gioco è nato per due levette, schermo touch, touch posteriore, giroscopio e fotocamera. Su PC:",
-    {{"Guardarsi attorno", "Muovi il mouse (catturato dal gioco) o la levetta destra."},
-     {"Toccare lo schermo", "Tieni premuto Alt: il cursore diventa un dito. Il pulsante sinistro tocca lo schermo."},
-     {"Touch posteriore", "Con Alt premuto, il pulsante destro tocca il retro della console."},
-     {"Strofinare, tagliare, disegnare", "Con Alt premuto trascina il cursore. Le forme disegnate col mouse sono accettate con più tolleranza."},
-     {"Scorrere e ruotare", "Quando il gioco lo chiede, trascina col pulsante sinistro anche a mouse catturato."},
-     {"Inclinare (travi, scivoli)", "Tieni A o D. Con un controller senza giroscopio usa la levetta sinistra; con il giroscopio inclina il controller."},
-     {"Fotocamera verso la luce", "F7 accende e spegne la lampada."},
-     {"Con il controller", "Tenendo un dorsale le levette muovono il cursore touch."},
-     {"Menu del port", "F1 apre impostazioni e comandi durante il gioco. F2 cambia risoluzione, F4 l'FSR."}},
+    "Il gioco è nato per schermo touch, touch posteriore, giroscopio e fotocamera. Scegli con cosa giochi: ogni scena mostra come si fa.",
+    {"Tastiera e mouse", "DualSense", "Xbox"},
+    {"Guardarsi attorno", "Toccare lo schermo", "Touch posteriore", "Strofinare, disegnare", "Scorrere",
+     "Inclinare", "Lampada della fotocamera", "Mirare e sparare", "Menu del port"},
+    {{"Muovi il mouse: il gioco lo cattura e la visuale lo segue.",
+      "Tieni premuto Alt: il cursore diventa un dito. Il pulsante sinistro tocca lo schermo.",
+      "Con Alt premuto, il pulsante destro tocca il retro della console.",
+      "Con Alt premuto trascina il cursore. Le forme disegnate col mouse sono accettate con più tolleranza.",
+      "Quando il gioco chiede di scorrere, trascina col pulsante sinistro, anche a mouse catturato.",
+      "Su travi e scivoli tieni A o D: la console si inclina da quel lato e torna dritta quando lasci.",
+      "F7 accende e spegne la lampada che il gioco vede con la fotocamera posteriore.",
+      "Pulsante destro per mirare, sinistro per sparare. Si cambiano nella scheda Mouse e controller.",
+      "F1 apre impostazioni e comandi durante il gioco. F2 cambia risoluzione, F4 l'FSR."},
+     {"Levetta destra.",
+      "Tocca il touchpad: è lo schermo della console. Oppure tieni {T}, muovi il cursore con una levetta e premi Croce.",
+      "Tieni {TR} e tocca il touchpad: tocchi il retro. Oppure tieni {TR}, muovi una levetta e premi Croce.",
+      "Trascina il dito sul touchpad. Oppure tieni {T} e Croce e muovi la levetta.",
+      "Quando il gioco chiede di scorrere, dai un colpo alla levetta destra in quella direzione.",
+      "Inclina il controller: il giroscopio fa da console. R3 rimette dritto.",
+      "F7 sulla tastiera: sul controller non c'è un tasto libero per la lampada.",
+      "{A} per mirare, {F} per sparare.",
+      "Tasto PS, oppure Create e Options insieme."},
+     {"Levetta destra.",
+      "Tieni {T}: compare il cursore. Muovilo con una levetta e premi A per toccare.",
+      "Tieni {TR}: il cursore passa sul retro. Muovilo con una levetta e premi A per toccare.",
+      "Tieni {T} e A e muovi la levetta: il cursore disegna.",
+      "Quando il gioco chiede di scorrere, dai un colpo alla levetta destra in quella direzione.",
+      "Senza giroscopio si inclina con la levetta sinistra, a destra e a sinistra.",
+      "F7 sulla tastiera: sul controller non c'è un tasto libero per la lampada.",
+      "{A} per mirare, {F} per sparare.",
+      "Tasto Xbox, oppure Visualizza e Menu insieme."}},
     {"Avanti (levetta sinistra)", "Indietro", "Sinistra", "Destra", "Croce · salta, arrampicati", "Cerchio · copertura, rotolata",
      "Quadrato · corpo a corpo", "Triangolo · raccogli, interagisci", "L · mira", "R · spara", "Start · pausa", "Select",
      "Croce direzionale su", "Croce direzionale giù", "Croce direzionale sinistra", "Croce direzionale destra"},
@@ -177,16 +200,37 @@ const Texts kEnglish = {
     {"Triggers", "Bumpers"}, "Controller gyroscope", "DualShock 4, DualSense and Switch Pro: they tilt like the console",
     "With the mouse captured its buttons are actions. Click to change, right click to go back.",
     {"Left button", "Right button", "Middle button", "Side button 1", "Side button 2"},
-    "The game was made for two sticks, a touch screen, a rear touch pad, a gyroscope and a camera. On a PC:",
-    {{"Looking around", "Move the mouse (captured by the game) or the right stick."},
-     {"Touching the screen", "Hold Alt: the cursor becomes a finger. The left button touches the screen."},
-     {"Rear touch pad", "With Alt held, the right button touches the back of the console."},
-     {"Rubbing, cutting, drawing", "With Alt held, drag the cursor. Shapes drawn with the mouse are accepted more easily."},
-     {"Swiping and twisting", "When the game asks, drag with the left button even with the mouse captured."},
-     {"Tilting (beams, slides)", "Hold A or D. A controller without a gyroscope uses its left stick; with one, tilt the controller."},
-     {"Camera to the light", "F7 turns the lamp on and off."},
-     {"With a controller", "While a bumper is held the sticks move the touch cursor."},
-     {"The port's menu", "F1 opens settings and controls during the game. F2 changes resolution, F4 FSR."}},
+    "The game was made for a touch screen, a rear touch pad, a gyroscope and a camera. Choose what you play with: each scene shows how.",
+    {"Keyboard and mouse", "DualSense", "Xbox"},
+    {"Looking around", "Touching the screen", "Rear touch pad", "Rubbing, drawing", "Swiping",
+     "Tilting", "The camera's lamp", "Aiming and firing", "The port's menu"},
+    {{"Move the mouse: the game captures it and the view follows.",
+      "Hold Alt: the cursor becomes a finger. The left button touches the screen.",
+      "With Alt held, the right button touches the back of the console.",
+      "With Alt held, drag the cursor. Shapes drawn with the mouse are accepted more easily.",
+      "When the game asks for a swipe, drag with the left button, even with the mouse captured.",
+      "On beams and slides hold A or D: the console tilts that way and comes level when you let go.",
+      "F7 turns on and off the lamp the game sees through the rear camera.",
+      "Right button to aim, left to fire. They change in the Mouse and controller tab.",
+      "F1 opens settings and controls during the game. F2 changes resolution, F4 FSR."},
+     {"Right stick.",
+      "Touch the touchpad: it is the console's screen. Or hold {T}, move the cursor with a stick and press Cross.",
+      "Hold {TR} and touch the touchpad: you touch the back. Or hold {TR}, move a stick and press Cross.",
+      "Drag your finger on the touchpad. Or hold {T} and Cross and move the stick.",
+      "When the game asks for a swipe, flick the right stick that way.",
+      "Tilt the controller: its gyroscope stands in for the console's. R3 levels it again.",
+      "F7 on the keyboard: the controller has no button to spare for the lamp.",
+      "{A} to aim, {F} to fire.",
+      "The PS button, or Create and Options together."},
+     {"Right stick.",
+      "Hold {T}: the cursor appears. Move it with a stick and press A to touch.",
+      "Hold {TR}: the cursor moves to the back. Move it with a stick and press A to touch.",
+      "Hold {T} and A and move the stick: the cursor draws.",
+      "When the game asks for a swipe, flick the right stick that way.",
+      "Without a gyroscope you tilt with the left stick, left and right.",
+      "F7 on the keyboard: the controller has no button to spare for the lamp.",
+      "{A} to aim, {F} to fire.",
+      "The Xbox button, or View and Menu together."}},
     {"Forward (left stick)", "Back", "Left", "Right", "Cross · jump, climb", "Circle · cover, roll",
      "Square · melee", "Triangle · pick up, interact", "L · aim", "R · fire", "Start · pause", "Select",
      "D-pad up", "D-pad down", "D-pad left", "D-pad right"},
@@ -416,6 +460,7 @@ private:
     bool hover_armed_ = false;
     int rebinding_ = -1, cancel_frame_ = -1;
     int how_item_ = 0;                             // "how to play": the scene shown
+    int how_device_ = -1;                          // ... for: 0 keyboard and mouse, 1 DualSense, 2 Xbox; -1: from the controller connected
     float how_since_ = 0, how_hold_until_ = 0;     // when it began; until when the player's choice stays
     bool done_ = false, play_ = false, status_keeps_focus_ = false;
     bool row_marked_ = false;
@@ -1480,15 +1525,35 @@ void Launcher::page_controls() {
     }
 }
 
-// "How to play": each of the console's inputs as a small moving scene -- what the player does on the left (keys,
-// mouse or controller), what the console sees on the right -- with its name and a line of explanation under it. The
-// scenes follow one another by themselves; pointing at a name, or choosing it, shows that one.
+// "How to play", a tutorial for the device chosen at its top (keyboard and mouse, a DualSense, an Xbox controller):
+// each of the console's inputs as a small moving scene -- what the player does with that device on the left, what
+// the console sees on the right -- with its name and what to do under it. The scenes follow one another by
+// themselves; pointing at a name, or choosing it, shows that one.
 void Launcher::how_page(float now) {
     const Texts& t = T();
     constexpr int kCount = 9;
     constexpr float kLength = 3.6f;  // seconds a scene's loop lasts
     text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_), kDim, t.how_lead, panel_width_);
-    cursor_ += measure(body_, px(17), t.how_lead, panel_width_).y + px(12);
+    cursor_ += measure(body_, px(17), t.how_lead, panel_width_).y + px(4);
+
+    // What the tutorial is for: chosen here, first guessed from the controller connected (a PlayStation one: the
+    // DualSense's; any other: the Xbox's; none: keyboard and mouse).
+    if (how_device_ < 0) {
+        how_device_ = 0;
+        int count = 0;
+        if (SDL_JoystickID* pads = SDL_GetGamepads(&count)) {
+            if (count > 0) {
+                const SDL_GamepadType type = SDL_GetGamepadTypeForID(pads[0]);
+                how_device_ = type == SDL_GAMEPAD_TYPE_PS3 || type == SDL_GAMEPAD_TYPE_PS4 || type == SDL_GAMEPAD_TYPE_PS5 ? 1 : 2;
+            }
+            SDL_free(pads);
+        }
+    }
+    const int device = how_device_;
+    if (segmented("how_device", t.how_devices, 3, &how_device_, nullptr, panel_width_ / px(1))) how_since_ = now;
+    const bool sony = device == 1;
+    const bool bumpers = setting("shoulder_buttons", "triggers") == "bumpers";   // L and R on the bumpers: the triggers hold the touch
+
     if (now >= how_hold_until_ && now - how_since_ >= kLength * 2) {  // two loops each, then the next
         how_item_ = (how_item_ + 1) % kCount;
         how_since_ = now;
@@ -1523,13 +1588,12 @@ void Launcher::how_page(float now) {
         list_->AddLine(ImVec2(c.x, ma.y), ImVec2(c.x, ma.y + h * 0.42f), fade(edge), px(1.5f));
         list_->AddLine(ImVec2(ma.x, ma.y + h * 0.42f), ImVec2(mb.x, ma.y + h * 0.42f), fade(edge), px(1.5f));
     };
-    // The console, level or tilted by `angle`; `rear`: seen from the back, its touch pad where the screen would be.
-    // Returns the middle of its screen (or pad); the screen is 2 x half wide and 2 x half_h high.
     const float half = px(84), half_h = px(47);
     const auto rotated = [&](ImVec2 c, ImVec2 offset, float angle) {
         const float cs = std::cos(angle), sn = std::sin(angle);
         return ImVec2(c.x + offset.x * cs - offset.y * sn, c.y + offset.x * sn + offset.y * cs);
     };
+    // The console, level or tilted by `angle`; `rear`: seen from the back, its touch pad where the screen would be.
     const auto console = [&](ImVec2 c, float angle, bool rear) {
         const float bw = px(150), bh = px(62);
         const auto box = [&](float x0, float y0, float x1, float y1, ImU32 colour) {
@@ -1566,16 +1630,6 @@ void Launcher::how_page(float now) {
     const auto ripple = [&](ImVec2 at, float q, ImU32 colour) {
         if (q > 0 && q < 1) list_->AddCircle(at, px(8) + px(26) * q, fade(colour, 1 - q), 0, px(2.5f));
     };
-    const auto controller = [&](ImVec2 c, bool bumper, ImVec2 stick) {
-        const float w = px(74), h = px(40);
-        if (bumper) list_->AddRectFilled(ImVec2(c.x - w + px(8), c.y - h - px(9)), ImVec2(c.x - w + px(52), c.y - h + px(4)), fade(kGold), px(6));
-        list_->AddRectFilled(ImVec2(c.x - w, c.y - h), ImVec2(c.x + w, c.y + h), fade(dark), px(24));
-        list_->AddRect(ImVec2(c.x - w, c.y - h), ImVec2(c.x + w, c.y + h), fade(edge), px(24), 0, px(1.5f));
-        list_->AddCircle(ImVec2(c.x - px(34), c.y + px(4)), px(15), fade(edge), 0, px(1.5f));
-        list_->AddCircle(ImVec2(c.x + px(34), c.y + px(4)), px(15), fade(edge), 0, px(1.5f));
-        list_->AddCircleFilled(ImVec2(c.x - px(34), c.y + px(4)), px(8), fade(kChrome, 0.6f));
-        list_->AddCircleFilled(ImVec2(c.x + px(34) + stick.x * px(8), c.y + px(4) + stick.y * px(8)), px(8), fade(kGold));
-    };
     const auto arrow = [&](ImVec2 from, ImVec2 to, ImU32 colour) {
         list_->AddLine(from, to, fade(colour), px(2.5f));
         const float length = std::sqrt((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y));
@@ -1584,16 +1638,95 @@ void Launcher::how_page(float now) {
         list_->AddTriangleFilled(to, ImVec2(to.x - d.x * px(10) - d.y * px(6), to.y - d.y * px(10) + d.x * px(6)),
                                  ImVec2(to.x - d.x * px(10) + d.y * px(6), to.y - d.y * px(10) - d.x * px(6)), fade(colour));
     };
+
+    // A controller, seen from above: a DualSense-like one (light, a touchpad, the sticks side by side, the four
+    // shapes) or an Xbox-like one (dark, the left stick high, A B X Y). What the scene presses lights up in gold.
+    struct Pose {
+        ImVec2 ls{}, rs{};
+        bool l1 = false, r1 = false, l2 = false, r2 = false, south = false, guide = false, back = false, start = false;
+        bool touch = false;
+        ImVec2 touch_at{0.5f, 0.5f};  // on the touchpad, 0..1
+        float tilt = 0;
+    };
+    const auto pad = [&](ImVec2 c, const Pose& s) {
+        const auto at = [&](float x, float y) { return rotated(c, ImVec2(px(x), px(y)), s.tilt); };
+        const ImU32 body = sony ? IM_COL32(226, 226, 232, 255) : IM_COL32(44, 46, 50, 255);
+        const ImU32 back_colour = sony ? IM_COL32(176, 176, 186, 255) : IM_COL32(26, 28, 31, 255);
+        const ImU32 ink = sony ? IM_COL32(70, 70, 82, 255) : IM_COL32(200, 200, 205, 255);
+        const auto quad = [&](float x0, float y0, float x1, float y1, ImU32 colour) {
+            list_->AddQuadFilled(at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1), fade(colour));
+        };
+        quad(-84, -60, -46, -44, s.l2 ? kGold : back_colour);  // the triggers, behind
+        quad(46, -60, 84, -44, s.r2 ? kGold : back_colour);
+        quad(-90, -48, -38, -36, s.l1 ? kGold : back_colour);  // the bumpers
+        quad(38, -48, 90, -36, s.r1 ? kGold : back_colour);
+        quad(-88, -40, 88, 16, body);                           // the body and its grips
+        list_->AddCircleFilled(at(-78, -12), px(28), fade(body), 28);
+        list_->AddCircleFilled(at(78, -12), px(28), fade(body), 28);
+        list_->AddCircleFilled(at(-64, 24), px(28), fade(body), 28);
+        list_->AddCircleFilled(at(64, 24), px(28), fade(body), 28);
+        const auto stick = [&](float x, float y, ImVec2 move) {
+            list_->AddCircleFilled(at(x, y), px(14), fade(sony ? IM_COL32(40, 40, 48, 255) : IM_COL32(20, 21, 24, 255)), 24);
+            const bool moved = move.x * move.x + move.y * move.y > 0.04f;
+            list_->AddCircleFilled(at(x + move.x * 6, y + move.y * 6), px(9), fade(moved ? kGold : IM_COL32(90, 90, 98, 255)), 20);
+        };
+        const ImVec2 left_stick = sony ? ImVec2(-28, 12) : ImVec2(-56, -14), right_stick = sony ? ImVec2(28, 12) : ImVec2(26, 14);
+        const ImVec2 dpad = sony ? ImVec2(-60, -14) : ImVec2(-26, 14), face(58, -14);
+        stick(left_stick.x, left_stick.y, s.ls);
+        stick(right_stick.x, right_stick.y, s.rs);
+        quad(dpad.x - 3, dpad.y - 10, dpad.x + 3, dpad.y + 10, ink);  // the d-pad
+        quad(dpad.x - 10, dpad.y - 3, dpad.x + 10, dpad.y + 3, ink);
+        for (int i = 0; i < 4; ++i) {  // top, right, bottom (south), left
+            const ImVec2 o(face.x + (i == 1 ? 11.0f : i == 3 ? -11.0f : 0.0f), face.y + (i == 0 ? -11.0f : i == 2 ? 11.0f : 0.0f));
+            const bool lit = i == 2 && s.south;
+            const ImVec2 q = at(o.x, o.y);
+            if (sony) {  // triangle, circle, cross, square, outlined
+                const ImU32 colour = fade(lit ? kGold : ink);
+                if (lit) list_->AddCircleFilled(q, px(6.5f), fade(kGold, 0.35f));
+                if (i == 0) list_->AddTriangle(ImVec2(q.x, q.y - px(4)), ImVec2(q.x + px(4), q.y + px(3)), ImVec2(q.x - px(4), q.y + px(3)), colour, px(1.5f));
+                if (i == 1) list_->AddCircle(q, px(4), colour, 12, px(1.5f));
+                if (i == 2) {
+                    list_->AddLine(ImVec2(q.x - px(3.5f), q.y - px(3.5f)), ImVec2(q.x + px(3.5f), q.y + px(3.5f)), colour, px(1.5f));
+                    list_->AddLine(ImVec2(q.x + px(3.5f), q.y - px(3.5f)), ImVec2(q.x - px(3.5f), q.y + px(3.5f)), colour, px(1.5f));
+                }
+                if (i == 3) list_->AddRect(ImVec2(q.x - px(3.5f), q.y - px(3.5f)), ImVec2(q.x + px(3.5f), q.y + px(3.5f)), colour, 0, 0, px(1.5f));
+            } else {  // Y, B, A, X: muted colours, the letter on each
+                static const ImU32 kFace[4] = {IM_COL32(196, 166, 52, 255), IM_COL32(184, 70, 60, 255), IM_COL32(84, 160, 72, 255), IM_COL32(62, 112, 190, 255)};
+                static const char* const kLetter[4] = {"Y", "B", "A", "X"};
+                list_->AddCircleFilled(q, px(6.5f), fade(lit ? kGold : kFace[i]), 16);
+                const ImVec2 size = measure(body_bold_, px(10), kLetter[i]);
+                text(body_bold_, px(10), ImVec2(q.x - size.x / 2, q.y - size.y / 2), IM_COL32(18, 18, 20, 255), kLetter[i]);
+            }
+        }
+        if (sony) {  // the touchpad, and a finger on it
+            quad(-30, -40, 30, -10, IM_COL32(52, 52, 62, 255));
+            if (s.touch) list_->AddCircleFilled(at(-30 + 60 * s.touch_at.x, -40 + 30 * s.touch_at.y), px(5), fade(kGold), 16);
+            list_->AddCircleFilled(at(0, 4), px(4.5f), fade(s.guide ? kGold : ink), 16);          // PS
+            list_->AddCircleFilled(at(-38, -34), px(3), fade(s.back ? kGold : ink), 10);         // Create
+            list_->AddCircleFilled(at(38, -34), px(3), fade(s.start ? kGold : ink), 10);         // Options
+        } else {
+            list_->AddCircleFilled(at(0, -26), px(7), fade(s.guide ? kGold : IM_COL32(70, 72, 78, 255)), 20);   // the guide button
+            list_->AddCircleFilled(at(-14, -8), px(3), fade(s.back ? kGold : ink), 10);         // View
+            list_->AddCircleFilled(at(14, -8), px(3), fade(s.start ? kGold : ink), 10);          // Menu
+        }
+    };
+
     const float span = std::clamp((p - 0.15f) / 0.6f, 0.0f, 1.0f);  // a movement in the loop's middle
     const float eased = ease_out(span);
+    const bool kbm = device == 0;
+    Pose pose;
+    bool show_pad = !kbm;
 
     list_->PushClipRect(a, b, true);
     switch (how_item_) {
-        case 0: {  // looking around: the mouse moves, the view turns
+        case 0: {  // looking around: the mouse or the right stick moves, the view turns
             const float sway = std::sin(turn);
-            mouse(ImVec2(left.x + px(34) * sway, left.y), false, false);
-            arrow(ImVec2(left.x - px(64), left.y + px(62)), ImVec2(left.x - px(92), left.y + px(62)), kDim);
-            arrow(ImVec2(left.x + px(64), left.y + px(62)), ImVec2(left.x + px(92), left.y + px(62)), kDim);
+            if (kbm) {
+                mouse(ImVec2(left.x + px(34) * sway, left.y), false, false);
+                arrow(ImVec2(left.x - px(64), left.y + px(62)), ImVec2(left.x - px(92), left.y + px(62)), kDim);
+                arrow(ImVec2(left.x + px(64), left.y + px(62)), ImVec2(left.x + px(92), left.y + px(62)), kDim);
+            }
+            pose.rs = ImVec2(sway, 0);
             const ImVec2 c = console(right, 0, false);
             list_->PushClipRect(ImVec2(c.x - half, c.y - half_h), ImVec2(c.x + half, c.y + half_h), true);
             const float shift = -sway * px(46);
@@ -1606,24 +1739,44 @@ void Launcher::how_page(float now) {
             list_->PopClipRect();
             break;
         }
-        case 1:    // touching the screen: Alt, the cursor as a finger, the left button
-        case 2: {  // the rear pad: Alt and the right button
+        case 1:    // touching the screen
+        case 2: {  // the rear pad
             const bool rear = how_item_ == 2;
             const bool pressed = p > 0.55f && p < 0.9f;
-            key(ImVec2(left.x - px(58), left.y), "Alt", true);
-            mouse(ImVec2(left.x + px(40), left.y), pressed && !rear, pressed && rear);
+            const float q = ease_out(std::clamp(p / 0.5f, 0.0f, 1.0f));
+            if (kbm) {
+                key(ImVec2(left.x - px(58), left.y), "Alt", true);
+                mouse(ImVec2(left.x + px(40), left.y), pressed && !rear, pressed && rear);
+            } else if (sony) {  // a finger on the touchpad; R1 (R2) held for the back
+                pose.touch = pressed;
+                pose.touch_at = ImVec2(0.2f + 0.45f * q, 0.8f - 0.5f * q);
+                if (rear) (bumpers ? pose.r2 : pose.r1) = true;
+            } else {  // the cursor: a shoulder held, the stick moves it, A touches
+                (rear ? (bumpers ? pose.r2 : pose.r1) : (bumpers ? pose.l2 : pose.l1)) = true;
+                pose.ls = p < 0.5f ? ImVec2(0.7f, -0.7f) : ImVec2();
+                pose.south = pressed;
+            }
             const ImVec2 c = console(right, 0, rear);
             const ImVec2 from(c.x - half + px(14), c.y + half_h - px(12)), to(c.x + px(22), c.y - px(8));
-            const float q = ease_out(std::clamp(p / 0.5f, 0.0f, 1.0f));
             const ImVec2 at(from.x + (to.x - from.x) * q, from.y + (to.y - from.y) * q);
             ripple(at, (p - 0.55f) / 0.35f, rear ? kAmber : kGold);
             finger(at, pressed, rear ? kAmber : kGold);
             break;
         }
-        case 3: {  // rubbing, cutting, drawing: Alt held, the left button down, the cursor dragged
+        case 3: {  // rubbing, drawing: a touch dragged
             const bool pressed = p > 0.12f && p < 0.8f;
-            key(ImVec2(left.x - px(58), left.y), "Alt", true);
-            mouse(ImVec2(left.x + px(40) + px(14) * std::sin(turn * 3), left.y), pressed, false);
+            const float wave = std::cos(span * 18.85f);
+            if (kbm) {
+                key(ImVec2(left.x - px(58), left.y), "Alt", true);
+                mouse(ImVec2(left.x + px(40) + px(14) * std::sin(turn * 3), left.y), pressed, false);
+            } else if (sony) {
+                pose.touch = pressed;
+                pose.touch_at = ImVec2(0.1f + 0.8f * span, 0.5f + 0.3f * std::sin(span * 18.85f));
+            } else {
+                (bumpers ? pose.l2 : pose.l1) = true;
+                pose.south = pressed;
+                pose.ls = pressed ? ImVec2(0.6f, 0.9f * wave) : ImVec2();
+            }
             const ImVec2 c = console(right, 0, false);
             ImVec2 last(c.x - half + px(16), c.y);
             const int steps = static_cast<int>(48 * span);
@@ -1636,40 +1789,61 @@ void Launcher::how_page(float now) {
             finger(last, pressed, kGold);
             break;
         }
-        case 4: {  // swiping: the left button held and dragged, the mouse still the look otherwise
+        case 4: {  // swiping: a drag with the left button, or a flick of the right stick
             const bool pressed = p > 0.15f && p < 0.75f;
-            mouse(ImVec2(left.x, left.y + px(26) - px(52) * eased), pressed, false);
+            if (kbm) mouse(ImVec2(left.x, left.y + px(26) - px(52) * eased), pressed, false);
+            else pose.rs = ImVec2(0, p > 0.15f && p < 0.35f ? -1.0f : 0.0f);
             const ImVec2 c = console(right, 0, false);
             const ImVec2 from(c.x, c.y + half_h - px(12)), to(c.x, c.y + half_h - px(12) - (2 * half_h - px(24)) * eased);
             if (pressed) arrow(from, to, kGold);
             finger(to, pressed, kGold);
             break;
         }
-        case 5: {  // tilting: A and D, or the controller's own gyroscope
+        case 5: {  // tilting: A and D, the DualSense itself, or the left stick
             const float lean = std::sin(turn);
-            key(ImVec2(left.x - px(34), left.y), "A", lean < -0.2f);
-            key(ImVec2(left.x + px(34), left.y), "D", lean > 0.2f);
+            if (kbm) {
+                key(ImVec2(left.x - px(34), left.y), "A", lean < -0.2f);
+                key(ImVec2(left.x + px(34), left.y), "D", lean > 0.2f);
+            } else if (sony) {
+                pose.tilt = 0.38f * lean;
+            } else {
+                pose.ls = ImVec2(lean, 0);
+            }
             console(right, 0.38f * lean, false);
             break;
         }
-        case 6: {  // the camera held to the light: F7 turns the lamp on and off
+        case 6: {  // the camera's lamp: F7, on any device
             const bool on = p > 0.3f && p < 0.8f;
             key(left, "F7", (p > 0.3f && p < 0.4f) || (p > 0.8f && p < 0.9f));
+            show_pad = false;
             const ImVec2 c = console(right, 0, false);
             const float glow = anim(ImGui::GetID("##lamp"), on, 6);
             list_->AddCircleFilled(c, px(18) + px(26) * glow, fade(IM_COL32(255, 226, 150, 255), 0.25f * glow), 32);
             list_->AddCircleFilled(c, px(12) + px(8) * glow, fade(IM_COL32(255, 240, 200, 255), 0.25f + 0.75f * glow), 32);
             break;
         }
-        case 7: {  // a controller: a bumper held, the stick moves the touch cursor
-            const ImVec2 stick(std::cos(turn), std::sin(turn));
-            controller(left, true, stick);
+        case 7: {  // aiming and firing: the sight closes in while aiming, a flash on each shot
+            const bool aiming = p > 0.15f && p < 0.9f;
+            const bool firing = (p > 0.45f && p < 0.52f) || (p > 0.65f && p < 0.72f);
+            if (kbm) mouse(left, firing, aiming);
+            else {
+                (bumpers ? pose.l1 : pose.l2) = aiming;
+                (bumpers ? pose.r1 : pose.r2) = firing;
+            }
             const ImVec2 c = console(right, 0, false);
-            finger(ImVec2(c.x + stick.x * px(46), c.y + stick.y * px(24)), false, kGold);
+            const float gap = px(aiming ? 8 : 18) + (aiming ? 0 : px(4) * std::sin(turn * 2));
+            const ImU32 sight = fade(aiming ? kGold : IM_COL32(255, 255, 255, 160));
+            for (int i = 0; i < 4; ++i) {
+                const ImVec2 d(i == 0 ? 1.0f : i == 1 ? -1.0f : 0.0f, i == 2 ? 1.0f : i == 3 ? -1.0f : 0.0f);
+                list_->AddLine(ImVec2(c.x + d.x * gap, c.y + d.y * gap), ImVec2(c.x + d.x * (gap + px(10)), c.y + d.y * (gap + px(10))), sight, px(2));
+            }
+            if (firing) list_->AddCircleFilled(c, px(14), fade(IM_COL32(255, 230, 160, 255), 0.6f), 20);
             break;
         }
-        default: {  // the port's menu: F1
-            key(left, "F1", p > 0.12f && p < 0.24f);
+        default: {  // the port's menu
+            const bool press = p > 0.12f && p < 0.24f;
+            if (kbm) key(left, "F1", press);
+            else pose.guide = press;
             const ImVec2 c = console(right, 0, false);
             const float open = ease_out(std::clamp((p - 0.2f) / 0.25f, 0.0f, 1.0f)) * (p < 0.9f ? 1.0f : 0.0f);
             if (open > 0.01f) {
@@ -1684,14 +1858,23 @@ void Launcher::how_page(float now) {
             break;
         }
     }
+    if (show_pad) pad(ImVec2(left.x, left.y + px(8)), pose);
     list_->PopClipRect();
     arrow(ImVec2(a.x + px(250), (a.y + b.y) / 2), ImVec2(a.x + px(282), (a.y + b.y) / 2), IM_COL32(255, 255, 255, 60));
     cursor_ += px(200) + px(12);
 
-    // The scene's name and its explanation.
-    text(body_bold_, px(21), ImVec2(origin_.x, origin_.y + cursor_), kInk, t.how[how_item_][0]);
-    text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + px(28)), kDim, t.how[how_item_][1], panel_width_);
-    cursor_ += px(28) + px(48);
+    // The scene's name and its explanation, with the shoulder buttons this player's settings give.
+    std::string explanation = t.how_text[device][how_item_];
+    const char* const names[2][4] = {{"L1", "R1", "L2", "R2"}, {"LB", "RB", "LT", "RT"}};
+    const char* const* n = names[sony ? 0 : 1];
+    const std::pair<const char*, const char*> marks[] = {{"{TR}", bumpers ? n[3] : n[1]}, {"{T}", bumpers ? n[2] : n[0]},
+                                                         {"{A}", bumpers ? n[0] : n[2]}, {"{F}", bumpers ? n[1] : n[3]}};
+    for (const auto& [mark, name] : marks) {
+        for (size_t at; (at = explanation.find(mark)) != std::string::npos;) explanation.replace(at, std::strlen(mark), name);
+    }
+    text(body_bold_, px(21), ImVec2(origin_.x, origin_.y + cursor_), kInk, t.how_titles[how_item_]);
+    text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + px(28)), kDim, explanation.c_str(), panel_width_);
+    cursor_ += px(28) + std::max(px(48), measure(body_, px(17), explanation.c_str(), panel_width_).y + px(14));
 
     // Every scene by name, three to a line: pointing at one shows it and holds it a while.
     const float cell = panel_width_ / 3, line = px(38);
@@ -1699,7 +1882,6 @@ void Launcher::how_page(float now) {
         const ImVec2 at(origin_.x + cell * static_cast<float>(i % 3), origin_.y + cursor_ + line * static_cast<float>(i / 3));
         ImGui::SetCursorScreenPos(at);
         ImGui::PushID(200 + i);
-        if (i == how_item_) claim_focus();
         const bool pressed = ImGui::InvisibleButton("##how", ImVec2(cell - px(8), line - px(6)), kNavigable);
         const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride), selected = nav_selected();
         const float hot = anim(ImGui::GetItemID(), hovered || selected);
@@ -1715,7 +1897,7 @@ void Launcher::how_page(float now) {
         list_->AddRectFilled(at, box_b, fade(mix(IM_COL32(255, 255, 255, 14), kGold, on * 0.9f + hot * 0.1f)));
         if (on > 0.5f) list_->AddRectFilled(at, ImVec2(at.x + (box_b.x - at.x) * std::min(1.0f, (now - how_since_) / (kLength * 2)), at.y + px(2)), fade(IM_COL32_WHITE, 0.7f));
         list_->PushClipRect(at, box_b, true);
-        text(body_bold_, px(16), ImVec2(at.x + px(10), at.y + px(6)), mix(kInk, IM_COL32(18, 14, 6, 255), on), t.how[i][0]);
+        text(body_bold_, px(16), ImVec2(at.x + px(10), at.y + px(6)), mix(kInk, IM_COL32(18, 14, 6, 255), on), t.how_titles[i]);
         list_->PopClipRect();
     }
     cursor_ += line * 3 + px(4);
@@ -2105,6 +2287,7 @@ int Launcher::run() {
         how_hold_until_ = 1e9f;
         how_since_ = 0.8f;
     }
+    if (const char* device = std::getenv("ABYSS_LAUNCHER_DEVICE")) how_device_ = std::clamp(std::atoi(device), 0, 2);   // (0 keyboard and mouse, 1 DualSense, 2 Xbox)
     SDL_GPUTexture* offscreen = nullptr;
     Uint64 last = SDL_GetPerformanceCounter();
     while (!done_) {
