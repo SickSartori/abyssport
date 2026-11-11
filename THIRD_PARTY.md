@@ -69,9 +69,12 @@ FFmpeg is not linked in: its libraries are used as they are built, as DLLs besid
 The launcher's backgrounds (`res/launcher/bg_*.jpg`) were generated for abyssport with
 [Magnific](https://www.magnific.ai) (Magnific One) from text alone, and resized; no image of the game was used. The
 icon and the emblem are drawn from code by `tools/art/make_art.py`. The controller in "How to play"
-(`res/launcher/pad.png`) is a controller drawing in SVG chosen by the project's owner, recoloured and cut by
-`tools/art/make_pad.py`; the launcher draws the buttons' symbols over it. (Its licence is to be confirmed before a
-release.)
+(`res/launcher/pad.png`) is a controller drawing from Magnific's stock, recoloured and cut by `tools/art/make_pad.py`;
+the launcher draws the buttons' symbols over it.
+
+The backgrounds and the controller are used under the project owner's Magnific Pro licence: commercial use, changes
+allowed, no attribution required. The licence does not allow handing out the original files, so only these modified
+images are in the repository and the release, never the downloaded SVG.
 
 ## In the release
 
