@@ -531,7 +531,7 @@ static void page_help(void) {
 		ImVec2 p = ImGui::GetCursorScreenPos(); const float h = ImGui::GetFontSize() * 1.5f;
 		ImGui::Dummy(ImVec2(ui::wordmark(ImGui::GetWindowDrawList(), p, h), h));
 	}
-	ImGui::TextWrapped("abyssport: Uncharted: Golden Abyss, statically recompiled to native code, running on this computer's own CPU and GPU. Built on Project Nativ's recompiler and runtime (GPL).");
+	ImGui::TextWrapped("abyssport: Uncharted: Golden Abyss, statically recompiled to native code, running on this computer's own CPU and GPU.");   /* (the credits are on GitHub: README.md, THIRD_PARTY.md) */
 	const char *title = std::getenv("RECOMP_TITLE");
 	int v = SDL_GetVersion();
 	ImGui::TextDisabled("%s  ·  Dear ImGui %s  ·  SDL %d.%d.%d", title && *title ? title : "unknown title", IMGUI_VERSION, SDL_VERSIONNUM_MAJOR(v), SDL_VERSIONNUM_MINOR(v), SDL_VERSIONNUM_MICRO(v));

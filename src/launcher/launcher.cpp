@@ -82,7 +82,7 @@ struct Texts {
     // {T} {TR}: what holds the front / rear touch cursor; {A} {F}: aim, fire (they swap with "L and R buttons")
     const char *how_titles[9], *how_text[3][9];
     const char *actions[16];
-    const char *about_lead, *version, *licence, *licence_text, *credits, *credits_text, *folder, *open_saves;
+    const char *about_lead, *version, *licence, *licence_text, *folder, *open_saves;
     const char *bar_game, *bar_game_ok, *bar_game_none, *bar_pad, *bar_pad_on, *bar_pad_off, *bar_version;
     const char *move_hint, *select, *back, *pages_hint, *tabs_hint;
     const char *starting;
@@ -156,7 +156,6 @@ const Texts kItalian = {
      "Croce direzionale su", "Croce direzionale giù", "Croce direzionale sinistra", "Croce direzionale destra"},
     "Uncharted: Golden Abyss ricompilato per PC. Serve la tua copia del gioco: niente del gioco viene distribuito.",
     "Versione", "Licenza", "GNU General Public License, versione 2 o successiva",
-    "Costruito su", "Project Nativ (ricompilatore e runtime), Vita3K, SDL, Dear ImGui, FFmpeg, LibAtrac9",
     "Salvataggi", "Apri la cartella",
     "Gioco", "pronto", "da preparare", "Controller", "collegato", "non collegato", "Versione",
     "Muovi", "Seleziona", "Indietro", "Pagine", "Schede",
@@ -236,7 +235,6 @@ const Texts kEnglish = {
      "D-pad up", "D-pad down", "D-pad left", "D-pad right"},
     "Uncharted: Golden Abyss recompiled for PC. You need your own copy of the game: nothing of the game ships.",
     "Version", "Licence", "GNU General Public License, version 2 or later",
-    "Built on", "Project Nativ (recompiler and runtime), Vita3K, SDL, Dear ImGui, FFmpeg, LibAtrac9",
     "Saved games", "Open the folder",
     "Game", "ready", "to be made", "Controller", "connected", "not connected", "Version",
     "Move", "Select", "Back", "Pages", "Tabs",
@@ -1979,8 +1977,7 @@ void Launcher::page_about() {
         cursor_ += std::max(px(30), measure(body_bold_, px(18), value, wrap).y + px(12));
     };
     fact(t.version, ABYSS_VERSION);
-    fact(t.licence, t.licence_text);
-    fact(t.credits, t.credits_text);
+    fact(t.licence, t.licence_text);   // (the credits are on GitHub: README.md, THIRD_PARTY.md)
     cursor_ += px(6);
     if (game_ready_) {
         text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + px(7)), kDim, t.folder);
