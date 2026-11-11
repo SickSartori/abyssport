@@ -20,7 +20,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -80,6 +82,9 @@ struct Texts {
     const char *bar_game, *bar_game_ok, *bar_game_none, *bar_pad, *bar_pad_on, *bar_pad_off, *bar_version;
     const char *move_hint, *select, *back, *pages_hint, *tabs_hint;
     const char *starting;
+    // the first run: the game made from the player's copy (tools/make_game.py, tools/build_game.py)
+    const char *copy, *copy_none, *pup, *pup_none, *choose, *prepare, *cancel, *failed, *space, *duration, *compile_only;
+    const char *steps[7];
 };
 
 const Texts kItalian = {
@@ -131,6 +136,14 @@ const Texts kItalian = {
     "Gioco", "pronto", "da preparare", "Controller", "collegato", "non collegato", "Versione",
     "Muovi", "Seleziona", "Indietro", "Pagine", "Schede",
     "Avvio del gioco...",
+    "La tua copia del gioco", "La cartella PCSA00029 copiata dalla console, con sce_sys/package/work.bin",
+    "Il file del firmware", "PSVUPDAT.PUP, aggiornamento 3.74 di PS Vita",
+    "Scegli", "PREPARA", "Annulla", "Preparazione non riuscita",
+    "Servono almeno %d GB liberi in %s",
+    "Una volta sola: circa 15 minuti. Il gioco viene decrittato, ricompilato e compilato su questo PC.",
+    "Il gioco è pronto ma va compilato per questa versione del port: circa 6 minuti.",
+    {"Decrittazione del firmware", "Decrittazione del gioco", "Controllo della versione 1.00", "Analisi del codice",
+     "Codice ARM in C", "Compilazione", "Collegamento"},
 };
 
 const Texts kEnglish = {
@@ -182,6 +195,14 @@ const Texts kEnglish = {
     "Game", "ready", "to be made", "Controller", "connected", "not connected", "Version",
     "Move", "Select", "Back", "Pages", "Tabs",
     "Starting the game...",
+    "Your copy of the game", "The PCSA00029 folder copied off the console, with sce_sys/package/work.bin",
+    "The firmware file", "PSVUPDAT.PUP, PS Vita system update 3.74",
+    "Choose", "PREPARE", "Cancel", "Preparing failed",
+    "At least %d GB must be free in %s",
+    "Once only: about 15 minutes. The game is decrypted, recompiled and compiled on this PC.",
+    "The game is ready but must be compiled for this version of the port: about 6 minutes.",
+    {"Decrypting the firmware", "Decrypting the game", "Checking version 1.00", "Analysing the code",
+     "ARM code to C", "Compiling", "Linking"},
 };
 
 std::string setting(const char* key, const char* def) {
@@ -283,6 +304,11 @@ private:
     SDL_GPUTexture* make_texture(const unsigned char* rgba, int width, int height);
     void find_game();
     void start_game();
+    fs::path setup_base() const;
+    void start_setup();
+    bool run_tool(const std::wstring& command, bool making);
+    void setup_rows();
+    void cancel_setup();
     void frame(float now, float dt);
     void header(float since);
     void panel(float now);
@@ -361,6 +387,18 @@ private:
 
     fs::path exe_directory_, game_directory_, program_;
     bool game_ready_ = false, program_ready_ = false, pad_connected_ = false;
+    bool tools_ready_ = false;  // the release: Python, the tools, the runtime and the compiler beside the launcher
+
+    // The first run, on a worker thread: everything under setup_lock_ is shared with it. The dialogs' answers too
+    // (SDL calls them back on a thread of its own).
+    std::mutex setup_lock_;
+    std::thread setup_thread_;
+    HANDLE setup_job_ = nullptr;   // the tools and the compilers they start: Cancel or closing the launcher ends them all
+    bool setup_running_ = false, setup_done_ = false, setup_cancelled_ = false;
+    int setup_step_ = 0;           // Texts::steps
+    float setup_progress_ = 0;
+    std::string setup_error_, setup_tail_;
+    std::string chosen_copy_, chosen_pup_;   // UTF-8
     std::string game_version_;
 
     bool menu_has_focus_ = true, focus_panel_ = false, left_pending_ = false;
@@ -445,6 +483,7 @@ bool Launcher::start() {
 }
 
 void Launcher::stop() {
+    if (setup_thread_.joinable()) cancel_setup();   // closing the launcher ends the tools and compilers too
     if (device_) SDL_WaitForGPUIdle(device_);
     if (ImGui::GetCurrentContext()) {
         ImGui_ImplSDLGPU3_Shutdown();
@@ -596,8 +635,239 @@ void Launcher::find_game() {
             std::fclose(file);
         }
     }
+    // The program: beside the launcher in the build tree; in a release, beside the player's library, where the first
+    // run links it (<base>/library/decrypted/PCSA00029/recomp -> <base>/abyss.exe).
     program_ = exe_directory_ / "abyss.exe";
+    if (!fs::exists(program_, error) && game_ready_) program_ = game_directory_.parent_path().parent_path().parent_path().parent_path() / "abyss.exe";
     program_ready_ = fs::exists(program_, error);
+    tools_ready_ = fs::exists(exe_directory_ / "python" / "python.exe", error) && fs::exists(exe_directory_ / "tools" / "make_game.py", error) &&
+                   fs::exists(exe_directory_ / "runtime" / "lib" / "libabyssrt.a", error);
+}
+
+// --- the first run: the game made from the player's copy ---
+
+// Where the library and the program go: beside the launcher when its folder can be written to, else the player's
+// %LOCALAPPDATA%\abyssport (both are where find_game looks).
+fs::path Launcher::setup_base() const {
+    const fs::path beside = exe_directory_ / "game";
+    std::error_code error;
+    fs::create_directories(beside, error);
+    const fs::path probe = beside / ".write-test";
+    if (FILE* file = _wfopen(probe.c_str(), L"wb")) {
+        std::fclose(file);
+        fs::remove(probe, error);
+        return beside;
+    }
+    const wchar_t* local = _wgetenv(L"LOCALAPPDATA");
+    return local ? fs::path(local) / "abyssport" : beside;
+}
+
+// One tool, its output read line by line: "[k/5] ..." from make_game.py, "  k/N" from build_game.py; the last lines
+// kept for the error. False when it failed or was cancelled.
+bool Launcher::run_tool(const std::wstring& command, bool making) {
+    SECURITY_ATTRIBUTES inherit = {sizeof(inherit), nullptr, TRUE};
+    HANDLE read = nullptr, write = nullptr;
+    if (!CreatePipe(&read, &write, &inherit, 0)) return false;
+    SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0);
+    STARTUPINFOW startup = {};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdOutput = startup.hStdError = write;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    PROCESS_INFORMATION process = {};
+    std::wstring line_buffer = command;
+    const bool started = CreateProcessW(nullptr, line_buffer.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
+                                        exe_directory_.c_str(), &startup, &process);
+    CloseHandle(write);
+    if (!started) {
+        CloseHandle(read);
+        std::lock_guard<std::mutex> hold(setup_lock_);
+        setup_error_ = "Python did not start: " + (exe_directory_ / "python" / "python.exe").string();
+        return false;
+    }
+    AssignProcessToJobObject(setup_job_, process.hProcess);
+    ResumeThread(process.hThread);
+    std::string pending;
+    char chunk[4096];
+    DWORD got = 0;
+    while (ReadFile(read, chunk, sizeof(chunk), &got, nullptr) && got) {
+        pending.append(chunk, got);
+        size_t end;
+        while ((end = pending.find('\n')) != std::string::npos) {
+            std::string line = pending.substr(0, end);
+            pending.erase(0, end + 1);
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+            std::lock_guard<std::mutex> hold(setup_lock_);
+            int k = 0, n = 0;
+            if (making && std::sscanf(line.c_str(), "[%d/%d]", &k, &n) == 2 && n > 0) {
+                setup_step_ = std::clamp(k - 1, 0, 4);
+                setup_progress_ = 0.75f * (k - 1) / n;
+            } else if (!making && std::sscanf(line.c_str(), " %d/%d", &k, &n) == 2 && n > 0) {
+                setup_step_ = 5;
+                setup_progress_ = (game_ready_ ? 0.0f : 0.75f) + (game_ready_ ? 0.95f : 0.22f) * k / n;
+            } else if (!making && line == "linking") {
+                setup_step_ = 6;
+            }
+            if (line.rfind("make_game:", 0) == 0 || line.rfind("build_game:", 0) == 0) setup_error_ = line.substr(line.find(':') + 2);
+            setup_tail_ += line + "\n";
+            if (setup_tail_.size() > 1500) setup_tail_.erase(0, setup_tail_.size() - 1500);
+        }
+    }
+    CloseHandle(read);
+    WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD code = 1;
+    GetExitCodeProcess(process.hProcess, &code);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return code == 0;
+}
+
+// Prepare: make_game.py from the copy and the firmware (skipped when the game is already made), then build_game.py,
+// on a worker thread. The launcher looks for the game again when it is done.
+void Launcher::start_setup() {
+    const Texts& t = T();
+    const fs::path base = setup_base();
+    const fs::path library = base / "library";
+    // the game already made: its own library, wherever it is
+    const fs::path recomp = game_ready_ ? game_directory_ : library / "decrypted" / "PCSA00029" / "recomp";
+    const int need_gb = game_ready_ ? 1 : 8;   // the library is 3.6 GB, the firmware and the game's copy decrypted on the way
+    std::error_code error;
+    fs::create_directories(base, error);
+    const fs::space_info space = fs::space(base, error);
+    {
+        std::lock_guard<std::mutex> hold(setup_lock_);
+        setup_error_.clear();
+        setup_tail_.clear();
+        setup_step_ = game_ready_ ? 5 : 0;
+        setup_progress_ = 0;
+        setup_done_ = setup_cancelled_ = false;
+        if (!error && space.available < static_cast<std::uintmax_t>(need_gb) << 30) {
+            char message[512];
+            std::snprintf(message, sizeof(message), t.space, need_gb, base.string().c_str());
+            setup_error_ = message;
+            return;
+        }
+        setup_running_ = true;
+    }
+    setup_job_ = CreateJobObjectW(nullptr, nullptr);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {};
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    SetInformationJobObject(setup_job_, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+
+    auto quote = [](const fs::path& p) { return L"\"" + p.wstring() + L"\""; };
+    auto utf8_path = [](const std::string& s) { return fs::u8path(s); };
+    const fs::path python = exe_directory_ / "python" / "python.exe";
+    std::vector<std::pair<std::wstring, bool>> commands;
+    if (!game_ready_) {
+        commands.push_back({quote(python) + L" -u " + quote(exe_directory_ / "tools" / "make_game.py") + L" " + quote(utf8_path(chosen_copy_)) + L" " +
+                                quote(utf8_path(chosen_pup_)) + L" --library " + quote(library), true});
+    }
+    const fs::path program = recomp.parent_path().parent_path().parent_path().parent_path() / "abyss.exe";
+    commands.push_back({quote(python) + L" -u " + quote(exe_directory_ / "tools" / "build_game.py") + L" " + quote(recomp) + L" " +
+                            quote(exe_directory_ / "runtime") + L" " + quote(exe_directory_ / "toolchain" / "llvm-mingw") + L" " + quote(program), false});
+    SetEnvironmentVariableW(L"PYTHONIOENCODING", L"utf-8");
+    SetEnvironmentVariableW(L"PYTHONUTF8", L"1");
+
+    if (setup_thread_.joinable()) setup_thread_.join();
+    setup_thread_ = std::thread([this, commands]() {
+        bool ok = true;
+        for (const auto& [command, making] : commands) {
+            if (!(ok = run_tool(command, making))) break;
+        }
+        std::lock_guard<std::mutex> hold(setup_lock_);
+        if (!ok && setup_error_.empty() && !setup_cancelled_) {   // no message of the tools': their last line
+            std::string tail = setup_tail_;
+            while (!tail.empty() && tail.back() == '\n') tail.pop_back();
+            setup_error_ = tail.substr(tail.rfind('\n') == std::string::npos ? 0 : tail.rfind('\n') + 1);
+            if (setup_error_.empty()) setup_error_ = "?";
+        }
+        if (ok) setup_progress_ = 1;
+        setup_running_ = false;
+        setup_done_ = true;
+    });
+}
+
+void Launcher::cancel_setup() {
+    {
+        std::lock_guard<std::mutex> hold(setup_lock_);
+        setup_cancelled_ = true;
+    }
+    if (setup_job_) TerminateJobObject(setup_job_, 1);
+    if (setup_thread_.joinable()) setup_thread_.join();
+    if (setup_job_) CloseHandle(setup_job_);
+    setup_job_ = nullptr;
+}
+
+// The rows of the first run, on the Play page: the copy and the firmware file, chosen in Windows' own dialogs; the
+// steps with a bar while it runs; what went wrong.
+void Launcher::setup_rows() {
+    const Texts& t = T();
+    std::unique_lock<std::mutex> hold(setup_lock_);
+    if (setup_done_) {   // the worker has finished: the game looked for again
+        setup_done_ = false;
+        hold.unlock();
+        if (setup_thread_.joinable()) setup_thread_.join();
+        if (setup_job_) CloseHandle(setup_job_);
+        setup_job_ = nullptr;
+        const bool had_art = background_ != nullptr;
+        find_game();
+        if (game_ready_) settings_load((game_directory_ / "settings.ini").string().c_str());
+        if (game_ready_ && !had_art) load_art();   // the game's own artwork, now that there is a copy of it
+        hold.lock();
+    }
+    const bool running = setup_running_;
+    if (!game_ready_ && !running) {
+        // the dialogs answer on SDL's thread
+        auto picked_copy = [](void* self, const char* const* list, int) {
+            if (!list || !list[0]) return;
+            std::lock_guard<std::mutex> hold(static_cast<Launcher*>(self)->setup_lock_);
+            static_cast<Launcher*>(self)->chosen_copy_ = list[0];
+        };
+        auto picked_pup = [](void* self, const char* const* list, int) {
+            if (!list || !list[0]) return;
+            std::lock_guard<std::mutex> hold(static_cast<Launcher*>(self)->setup_lock_);
+            static_cast<Launcher*>(self)->chosen_pup_ = list[0];
+        };
+        const std::string copy = chosen_copy_, pup = chosen_pup_;
+        hold.unlock();
+        if (status(!copy.empty(), t.copy, copy.empty() ? t.copy_none : copy.c_str(), t.choose, "##copy")) {
+            SDL_ShowOpenFolderDialog(picked_copy, this, window_, copy.empty() ? nullptr : copy.c_str(), false);
+        }
+        if (status(!pup.empty(), t.pup, pup.empty() ? t.pup_none : pup.c_str(), t.choose, "##pup")) {
+            static const SDL_DialogFileFilter filter = {"PUP", "PUP;pup"};
+            SDL_ShowOpenFileDialog(picked_pup, this, window_, &filter, 1, pup.empty() ? nullptr : pup.c_str(), false);
+        }
+        hold.lock();
+    }
+    if (running) {
+        const float now = static_cast<float>(ImGui::GetTime());
+        const ImVec2 a(origin_.x, origin_.y + cursor_);
+        text(body_bold_, px(21), a, kInk, t.steps[setup_step_]);
+        const float bar_y = a.y + px(34), width = panel_width_ - px(140);
+        list_->AddRectFilled(ImVec2(a.x, bar_y), ImVec2(a.x + width, bar_y + px(8)), fade(IM_COL32(255, 255, 255, 30)));
+        list_->AddRectFilled(ImVec2(a.x, bar_y), ImVec2(a.x + width * std::clamp(setup_progress_, 0.02f, 1.0f), bar_y + px(8)), fade(kGold));
+        const float sweep = std::fmod(now, 1.6f) / 1.6f;   // it moves even when a step takes minutes
+        list_->AddRectFilled(ImVec2(a.x + width * setup_progress_ * sweep, bar_y), ImVec2(a.x + width * setup_progress_ * sweep + px(30), bar_y + px(8)),
+                             fade(IM_COL32(255, 230, 160, 120)));
+        hold.unlock();
+        if (small_button(t.cancel, ImVec2(a.x + width + px(20), a.y + px(18)), "##cancel")) cancel_setup();
+        cursor_ += px(64);
+        return;
+    }
+    const std::string failure = setup_error_, tail = setup_tail_;
+    const bool can_start = game_ready_ || (!chosen_copy_.empty() && !chosen_pup_.empty());
+    hold.unlock();
+    if (!failure.empty()) {
+        status(false, t.failed, failure.c_str(), nullptr, "##failed", true);
+        if (!tail.empty()) {
+            const char* last = tail.c_str() + tail.size();   // the last four lines, small
+            for (int lines = 0; last > tail.c_str() && lines < 5; ) if (*--last == '\n') ++lines;
+            text(body_, px(14), ImVec2(origin_.x + px(46), origin_.y + cursor_), kDim, last, origin_.x + panel_width_);
+            cursor_ += px(80);
+        }
+    }
+    lead(game_ready_ ? t.compile_only : t.duration);
+    if (can_start && big_button(t.prepare, "##prepare", true)) start_setup();
 }
 
 // The game, as play.cmd starts it: in its own folder, told which libraries to load and where its shader recipes are.
@@ -616,11 +886,21 @@ void Launcher::start_game() {
             break;
         }
     }
-    std::string command = "\"" + program_.string() + "\" game.img 81009ffc 100000000000";
-    STARTUPINFOA startup = {};
+    // what the game prints goes to abyss.log in its folder, for a bug report (the last run's only)
+    SECURITY_ATTRIBUTES inherit = {sizeof(inherit), nullptr, TRUE};
+    HANDLE log = CreateFileW((game_directory_ / "abyss.log").c_str(), GENERIC_WRITE, FILE_SHARE_READ, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    std::wstring command = L"\"" + program_.wstring() + L"\" game.img 81009ffc 100000000000";
+    STARTUPINFOW startup = {};
     startup.cb = sizeof(startup);
+    if (log != INVALID_HANDLE_VALUE) {
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdOutput = startup.hStdError = log;
+        startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    }
     PROCESS_INFORMATION process = {};
-    if (!CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, 0, nullptr, game_directory_.string().c_str(), &startup, &process)) {
+    const bool started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, log != INVALID_HANDLE_VALUE, 0, nullptr, game_directory_.c_str(), &startup, &process);
+    if (log != INVALID_HANDLE_VALUE) CloseHandle(log);
+    if (!started) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "abyssport", "abyss.exe did not start.", window_);
         return;
     }
@@ -1010,6 +1290,11 @@ void Launcher::page_play() {
     lead(ready ? t.ready_lead : t.setup_lead);
     std::string detail = "Uncharted: Golden Abyss \xC2\xB7 PCSA00029";
     if (!game_version_.empty()) detail += " \xC2\xB7 " + game_version_;
+    if (tools_ready_ && !ready) {   // a release: the launcher makes the game itself
+        if (game_ready_) status(true, t.game_ok, detail.c_str(), nullptr, "##game");
+        setup_rows();
+        return;
+    }
     status(game_ready_, game_ready_ ? t.game_ok : t.game_missing, game_ready_ ? detail.c_str() : t.game_missing_detail, nullptr, "##game", !game_ready_);
     if (!program_ready_) status(false, t.program_missing, t.program_missing_detail, nullptr, "##program", true);
     status(pad_connected_, pad_connected_ ? t.pad_on : t.pad_off, pad_connected_ ? t.pad_on_detail : t.pad_off_detail, nullptr, "##pad");

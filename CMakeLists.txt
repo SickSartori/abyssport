@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(abyssport VERSION 0.1.0 LANGUAGES C CXX)
+project(abyssport VERSION 0.1.0 LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -139,9 +139,11 @@ set(ABYSS_C_SOURCES
     src/platform/win32_compat.c
     src/ui/window.c
 )
-add_executable(abyss ${ABYSS_C_SOURCES} src/ui/overlay.cpp)
-target_include_directories(abyss PRIVATE
-    src/audio src/core src/debug src/gfx src/gfx/fsr src/input src/media src/platform src/ui
+# The runtime is a library of its own: the release ships it compiled, and the player's PC links the game's code to it
+# (tools/build_game.py) with the same compiler. Linked whole: some of its files register themselves from constructors.
+add_library(abyssrt STATIC ${ABYSS_C_SOURCES} src/ui/overlay.cpp res/utf8.rc)
+target_include_directories(abyssrt PRIVATE
+    src/audio src/core src/debug src/gfx src/gfx/fsr src/input src/media src/platform src/ui src/recomp
     "${CMAKE_SOURCE_DIR}"                       # ("third_party/...")
     "${CMAKE_BINARY_DIR}/generated"
     "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}"
@@ -149,16 +151,19 @@ target_include_directories(abyss PRIVATE
 )
 # No warnings for now: the adapted code is kept as it is upstream. (_POSIX_THREAD_SAFE_FUNCTIONS: C only -- with it
 # mingw-w64 defines the localtime_r that Dear ImGui's headers also define.)
-target_compile_options(abyss PRIVATE -w ${ABYSS_COMPAT})
+target_compile_options(abyssrt PRIVATE -w ${ABYSS_COMPAT})
 set_source_files_properties(${ABYSS_C_SOURCES} PROPERTIES COMPILE_DEFINITIONS _POSIX_THREAD_SAFE_FUNCTIONS)
 # The settings the game plays with, as Project Nativ's pack for it sets them (tools/PCSA00029.toml RUN_ENV).
 set_property(SOURCE src/core/main.c APPEND PROPERTY COMPILE_DEFINITIONS
     "RECOMP_BUILTIN_ENV=\"RECOMP_GAME_OPTIONS=fov,view_distance RECOMP_SRGB=1 RECOMP_ASPECT_HOOK=1 RECOMP_HUD_DRAWS=2d RECOMP_TARGET_SCALE=720x408:1.3333 RECOMP_CAMERA_LAMP=1 RECOMP_FSR_SUPPORTED=1\"")
 # The films: sceAvcdec through libavcodec.
 set_property(SOURCE src/media/video.c APPEND PROPERTY COMPILE_DEFINITIONS RECOMP_AVCODEC)
-target_link_libraries(abyss PRIVATE abyssgame atrac9 imgui zlibstatic SDL3::SDL3-static
+target_link_libraries(abyssrt PUBLIC atrac9 imgui zlibstatic SDL3::SDL3-static
     "${ffmpeg_SOURCE_DIR}/lib/libavcodec.dll.a" "${ffmpeg_SOURCE_DIR}/lib/libavutil.dll.a"
     pthread winmm ws2_32 bcrypt)
+# The program: the game's code linked to the runtime, as tools/build_game.py links it on the player's PC.
+add_executable(abyss)
+target_link_libraries(abyss PRIVATE abyssgame "$<LINK_LIBRARY:WHOLE_ARCHIVE,abyssrt>")
 file(GLOB ABYSS_FFMPEG_DLLS "${ffmpeg_SOURCE_DIR}/bin/avcodec-*.dll" "${ffmpeg_SOURCE_DIR}/bin/avutil-*.dll"
                             "${ffmpeg_SOURCE_DIR}/bin/swresample-*.dll")
 add_custom_command(TARGET abyss POST_BUILD
@@ -177,7 +182,7 @@ set_tests_properties(abyss_first_frames PROPERTIES
 # The launcher: the first screen (the game ready or not, settings, controls, how the console's touch and tilt are
 # played on a PC); Play starts abyss. In the look of mc3port's and sm2port's launchers, on SDL3. A window program:
 # no console behind it.
-add_executable(abyssport WIN32 src/launcher/launcher.cpp src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c)
+add_executable(abyssport WIN32 src/launcher/launcher.cpp res/utf8.rc src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c)
 target_include_directories(abyssport PRIVATE src/core src/platform "${CMAKE_SOURCE_DIR}")
 target_compile_options(abyssport PRIVATE -w)
 target_compile_definitions(abyssport PRIVATE ABYSS_VERSION="${PROJECT_VERSION}")

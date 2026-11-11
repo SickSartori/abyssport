@@ -21,3 +21,4 @@
 
 # The compiler (tools/get_toolchain.py)
 /toolchain/
+/dist/

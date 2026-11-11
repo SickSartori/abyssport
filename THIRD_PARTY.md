@@ -63,3 +63,15 @@ FFmpeg is not linked in: its libraries are used as they are built, as DLLs besid
 |---|---|---|---|
 | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) | 20261104 (Clang 23.1.5) | Apache 2.0 with LLVM exceptions; mingw-w64's runtime under its own permissive licences | The compiler; its C and C++ libraries and winpthreads are linked into the program |
 | [Ninja](https://ninja-build.org) | 1.13.2 | Apache 2.0 | Runs the build |
+
+## In the release
+
+`tools/make_package.py` puts these in the release, pinned by version and hash, with their licences in `licenses/`:
+the player's PC makes the game with them.
+
+| Software | Version | Licence | Use |
+|---|---|---|---|
+| llvm-mingw, its x86-64 part (above) | 20261104 | as above | Compiles the game's code and links it to the runtime |
+| [Python](https://www.python.org), the embeddable distribution | 3.14.7 | PSF License | Runs `tools/make_game.py` and `tools/build_game.py` |
+| [Capstone](https://www.capstone-engine.org) | 5.0.9 | BSD 3-clause | The disassembler the recompiler reads the game's code with |
+| [PyCryptodome](https://www.pycryptodome.org) | 3.24.0 | BSD 2-clause, public domain parts | The decrypter's AES and SHA |

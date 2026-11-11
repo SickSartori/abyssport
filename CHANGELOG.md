@@ -23,5 +23,11 @@
   preset. SDL3, zlib and FFmpeg are downloaded at configure time, pinned by version and hash.
 - The shader recipes for the game (`res/shaders.txt`), so its shaders are built as it starts and not at their
   first use.
-- `docs/controls.md`: the controls, key by key.
+- The release (`tools/make_package.py`): the launcher, the runtime compiled, the tools, an embedded Python and the
+  compiler, in one zip. The first time, the launcher asks for your copy of the game and the firmware file and
+  makes the game on your PC (Prepare: decrypted, recompiled, compiled by `tools/build_game.py`), with its progress
+  on screen; Cancel or closing the launcher stops it, and a second run picks up the files already compiled.
+- `abyss.log`: what the game prints, beside its files, for bug reports.
+- Paths with accented letters work (UTF-8 as the programs' code page).
+- `docs/controls.md`: the controls, key by key. F1 opens the in-game menu, F10 cycles the performance display.
 - `play.cmd`: starts the game from the build tree without the launcher.
