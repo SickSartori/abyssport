@@ -425,6 +425,7 @@ private:
     SDL_GPUDevice* device_ = nullptr;
     SDL_GPUTextureFormat format_ = SDL_GPU_TEXTUREFORMAT_INVALID;
     SDL_GPUTexture *background_ = nullptr, *logo_ = nullptr, *emblem_ = nullptr;
+    SDL_GPUTexture* pad_art_[2] = {};   // "how to play": Kenney's DualSense and Xbox controllers (art/pad_*.png, CC0)
     bool background_is_game_ = false;   // the game's own picture, not one of ours (art/bg_*.jpg)
     int background_width_ = 0, background_height_ = 0, logo_width_ = 0, logo_height_ = 0;
     int width_ = 0, height_ = 0;
@@ -544,6 +545,7 @@ void Launcher::stop() {
         if (background_) SDL_ReleaseGPUTexture(device_, background_);
         if (logo_) SDL_ReleaseGPUTexture(device_, logo_);
         if (emblem_) SDL_ReleaseGPUTexture(device_, emblem_);
+        for (SDL_GPUTexture* art : pad_art_) if (art) SDL_ReleaseGPUTexture(device_, art);
         if (window_) SDL_ReleaseWindowFromGPUDevice(device_, window_);
         SDL_DestroyGPUDevice(device_);
     }
@@ -615,6 +617,13 @@ void Launcher::load_art() {
         if (unsigned char* emblem = stbi_load((exe_directory_ / "art" / "emblem.png").string().c_str(), &w, &h, &n, 4)) {
             emblem_ = make_texture(emblem, w, h);
             stbi_image_free(emblem);
+        }
+        static const char* const kPads[2] = {"pad_dualsense.png", "pad_xbox.png"};
+        for (int i = 0; i < 2; ++i) {
+            if (unsigned char* art = stbi_load((exe_directory_ / "art" / kPads[i]).string().c_str(), &w, &h, &n, 4)) {
+                pad_art_[i] = make_texture(art, w, h);
+                stbi_image_free(art);
+            }
         }
     }
     if (!game_ready_) {
@@ -1639,8 +1648,9 @@ void Launcher::how_page(float now) {
                                  ImVec2(to.x - d.x * px(10) + d.y * px(6), to.y - d.y * px(10) - d.x * px(6)), fade(colour));
     };
 
-    // A controller, seen from above: a DualSense-like one (light, a touchpad, the sticks side by side, the four
-    // shapes) or an Xbox-like one (dark, the left stick high, A B X Y). What the scene presses lights up in gold.
+    // A controller: Kenney's DualSense or Xbox drawing (art/pad_*.png, CC0: a silhouette whose buttons, sticks and
+    // touchpad are holes), tinted, with its shoulders above it. What the scene presses lights up in gold, in the
+    // drawing's own holes: the places below are its pixels (of 128).
     struct Pose {
         ImVec2 ls{}, rs{};
         bool l1 = false, r1 = false, l2 = false, r2 = false, south = false, guide = false, back = false, start = false;
@@ -1648,66 +1658,50 @@ void Launcher::how_page(float now) {
         ImVec2 touch_at{0.5f, 0.5f};  // on the touchpad, 0..1
         float tilt = 0;
     };
+    struct PadArt {
+        ImVec2 ls, rs;           // the sticks' holes
+        float stick_r;
+        ImVec2 south;            // Cross / A
+        float button_r;
+        ImVec2 guide, back, start;
+        ImVec2 touch_a, touch_b;  // the touchpad (a DualSense's), else nothing
+    };
+    static const PadArt kArt[2] = {
+        {{49.5f, 63.6f}, {77.5f, 63.6f}, 6.0f, {92.5f, 58.5f}, 3.2f, {63.5f, 64.0f}, {45.0f, 38.0f}, {82.0f, 38.0f}, {49.0f, 36.0f}, {78.0f, 53.0f}},
+        {{40.5f, 46.6f}, {71.5f, 63.6f}, 6.5f, {85.5f, 57.5f}, 3.8f, {63.5f, 39.5f}, {55.0f, 49.0f}, {72.0f, 49.0f}, {}, {}},
+    };
     const auto pad = [&](ImVec2 c, const Pose& s) {
-        const auto at = [&](float x, float y) { return rotated(c, ImVec2(px(x), px(y)), s.tilt); };
-        const ImU32 body = sony ? IM_COL32(226, 226, 232, 255) : IM_COL32(44, 46, 50, 255);
-        const ImU32 back_colour = sony ? IM_COL32(176, 176, 186, 255) : IM_COL32(26, 28, 31, 255);
-        const ImU32 ink = sony ? IM_COL32(70, 70, 82, 255) : IM_COL32(200, 200, 205, 255);
-        const auto quad = [&](float x0, float y0, float x1, float y1, ImU32 colour) {
-            list_->AddQuadFilled(at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1), fade(colour));
+        const float size = px(184);  // the drawing's 128 pixels on screen
+        const auto at = [&](float u, float v) { return rotated(c, ImVec2((u - 64) / 128 * size, (v - 64) / 128 * size), s.tilt); };
+        const float unit = size / 128;
+        const PadArt& art = kArt[sony ? 0 : 1];
+        const ImU32 body = sony ? IM_COL32(232, 232, 238, 255) : IM_COL32(150, 154, 164, 255);
+        const ImU32 back_colour = IM_COL32(96, 96, 104, 255);
+        const auto bar = [&](float u0, float v0, float u1, float v1, bool on) {   // a shoulder button, behind the body
+            list_->AddQuadFilled(at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1), fade(on ? kGold : back_colour));
         };
-        quad(-84, -60, -46, -44, s.l2 ? kGold : back_colour);  // the triggers, behind
-        quad(46, -60, 84, -44, s.r2 ? kGold : back_colour);
-        quad(-90, -48, -38, -36, s.l1 ? kGold : back_colour);  // the bumpers
-        quad(38, -48, 90, -36, s.r1 ? kGold : back_colour);
-        quad(-88, -40, 88, 16, body);                           // the body and its grips
-        list_->AddCircleFilled(at(-78, -12), px(28), fade(body), 28);
-        list_->AddCircleFilled(at(78, -12), px(28), fade(body), 28);
-        list_->AddCircleFilled(at(-64, 24), px(28), fade(body), 28);
-        list_->AddCircleFilled(at(64, 24), px(28), fade(body), 28);
-        const auto stick = [&](float x, float y, ImVec2 move) {
-            list_->AddCircleFilled(at(x, y), px(14), fade(sony ? IM_COL32(40, 40, 48, 255) : IM_COL32(20, 21, 24, 255)), 24);
-            const bool moved = move.x * move.x + move.y * move.y > 0.04f;
-            list_->AddCircleFilled(at(x + move.x * 6, y + move.y * 6), px(9), fade(moved ? kGold : IM_COL32(90, 90, 98, 255)), 20);
-        };
-        const ImVec2 left_stick = sony ? ImVec2(-28, 12) : ImVec2(-56, -14), right_stick = sony ? ImVec2(28, 12) : ImVec2(26, 14);
-        const ImVec2 dpad = sony ? ImVec2(-60, -14) : ImVec2(-26, 14), face(58, -14);
-        stick(left_stick.x, left_stick.y, s.ls);
-        stick(right_stick.x, right_stick.y, s.rs);
-        quad(dpad.x - 3, dpad.y - 10, dpad.x + 3, dpad.y + 10, ink);  // the d-pad
-        quad(dpad.x - 10, dpad.y - 3, dpad.x + 10, dpad.y + 3, ink);
-        for (int i = 0; i < 4; ++i) {  // top, right, bottom (south), left
-            const ImVec2 o(face.x + (i == 1 ? 11.0f : i == 3 ? -11.0f : 0.0f), face.y + (i == 0 ? -11.0f : i == 2 ? 11.0f : 0.0f));
-            const bool lit = i == 2 && s.south;
-            const ImVec2 q = at(o.x, o.y);
-            if (sony) {  // triangle, circle, cross, square, outlined
-                const ImU32 colour = fade(lit ? kGold : ink);
-                if (lit) list_->AddCircleFilled(q, px(6.5f), fade(kGold, 0.35f));
-                if (i == 0) list_->AddTriangle(ImVec2(q.x, q.y - px(4)), ImVec2(q.x + px(4), q.y + px(3)), ImVec2(q.x - px(4), q.y + px(3)), colour, px(1.5f));
-                if (i == 1) list_->AddCircle(q, px(4), colour, 12, px(1.5f));
-                if (i == 2) {
-                    list_->AddLine(ImVec2(q.x - px(3.5f), q.y - px(3.5f)), ImVec2(q.x + px(3.5f), q.y + px(3.5f)), colour, px(1.5f));
-                    list_->AddLine(ImVec2(q.x + px(3.5f), q.y - px(3.5f)), ImVec2(q.x - px(3.5f), q.y + px(3.5f)), colour, px(1.5f));
-                }
-                if (i == 3) list_->AddRect(ImVec2(q.x - px(3.5f), q.y - px(3.5f)), ImVec2(q.x + px(3.5f), q.y + px(3.5f)), colour, 0, 0, px(1.5f));
-            } else {  // Y, B, A, X: muted colours, the letter on each
-                static const ImU32 kFace[4] = {IM_COL32(196, 166, 52, 255), IM_COL32(184, 70, 60, 255), IM_COL32(84, 160, 72, 255), IM_COL32(62, 112, 190, 255)};
-                static const char* const kLetter[4] = {"Y", "B", "A", "X"};
-                list_->AddCircleFilled(q, px(6.5f), fade(lit ? kGold : kFace[i]), 16);
-                const ImVec2 size = measure(body_bold_, px(10), kLetter[i]);
-                text(body_bold_, px(10), ImVec2(q.x - size.x / 2, q.y - size.y / 2), IM_COL32(18, 18, 20, 255), kLetter[i]);
-            }
+        bar(27, 22, 45, 30, s.l2);    // the triggers
+        bar(83, 22, 101, 30, s.r2);
+        bar(22, 28, 48, 34, s.l1);    // the bumpers
+        bar(80, 28, 106, 34, s.r1);
+        if (SDL_GPUTexture* texture = pad_art_[sony ? 0 : 1]) {
+            list_->AddImageQuad(ImTextureRef(reinterpret_cast<ImTextureID>(texture)), at(0, 0), at(128, 0), at(128, 128), at(0, 128),
+                                ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1), fade(body));
         }
-        if (sony) {  // the touchpad, and a finger on it
-            quad(-30, -40, 30, -10, IM_COL32(52, 52, 62, 255));
-            if (s.touch) list_->AddCircleFilled(at(-30 + 60 * s.touch_at.x, -40 + 30 * s.touch_at.y), px(5), fade(kGold), 16);
-            list_->AddCircleFilled(at(0, 4), px(4.5f), fade(s.guide ? kGold : ink), 16);          // PS
-            list_->AddCircleFilled(at(-38, -34), px(3), fade(s.back ? kGold : ink), 10);         // Create
-            list_->AddCircleFilled(at(38, -34), px(3), fade(s.start ? kGold : ink), 10);         // Options
-        } else {
-            list_->AddCircleFilled(at(0, -26), px(7), fade(s.guide ? kGold : IM_COL32(70, 72, 78, 255)), 20);   // the guide button
-            list_->AddCircleFilled(at(-14, -8), px(3), fade(s.back ? kGold : ink), 10);         // View
-            list_->AddCircleFilled(at(14, -8), px(3), fade(s.start ? kGold : ink), 10);          // Menu
+        const auto stick = [&](ImVec2 hole, ImVec2 move) {   // its cap, moved within the hole
+            const bool moved = move.x * move.x + move.y * move.y > 0.04f;
+            list_->AddCircleFilled(at(hole.x + move.x * 2.5f, hole.y + move.y * 2.5f), unit * art.stick_r * 0.78f, fade(moved ? kGold : IM_COL32(70, 70, 78, 255)), 20);
+        };
+        stick(art.ls, s.ls);
+        stick(art.rs, s.rs);
+        if (s.south) list_->AddCircleFilled(at(art.south.x, art.south.y), unit * art.button_r, fade(kGold), 14);
+        if (s.guide) list_->AddCircleFilled(at(art.guide.x, art.guide.y), unit * 3.6f, fade(kGold), 14);
+        if (s.back) list_->AddCircleFilled(at(art.back.x, art.back.y), unit * 2.2f, fade(kGold), 10);
+        if (s.start) list_->AddCircleFilled(at(art.start.x, art.start.y), unit * 2.2f, fade(kGold), 10);
+        if (sony && s.touch) {   // a finger on the touchpad
+            const ImVec2 f(art.touch_a.x + (art.touch_b.x - art.touch_a.x) * s.touch_at.x, art.touch_a.y + (art.touch_b.y - art.touch_a.y) * s.touch_at.y);
+            list_->AddCircleFilled(at(f.x, f.y), unit * 3.5f, fade(kGold), 14);
+            list_->AddCircle(at(f.x, f.y), unit * 5.5f, fade(kGold, 0.5f), 16, px(1.5f));
         }
     };
 

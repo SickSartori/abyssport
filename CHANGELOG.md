@@ -15,7 +15,8 @@
 - The launcher (`abyssport.exe`), in the look of mc3port's and sm2port's: whether the game is ready; the Original,
   Enhanced and Custom styles; picture, effects, game and audio settings; the keyboard's keys and the mouse's five
   buttons, each on any action; and "How to play", a tutorial for keyboard and mouse, a DualSense or an Xbox
-  controller (chosen at its top, first guessed from the controller connected): nine small moving scenes that show
+  controller (chosen at its top, first guessed from the controller connected; the controllers are Kenney's
+  drawings, their buttons lighting up as the scene presses them): nine small moving scenes that show
   how the console's touch screen, rear pad, tilt, camera, aiming and the port's menu are played with that device. In Italian and English.
   Play starts the game and the launcher comes back when it ends.
 - `tools/make_game.py`: the game's code and data made from your own copy and Sony's firmware update file (3.74), in

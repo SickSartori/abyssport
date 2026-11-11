@@ -68,7 +68,9 @@ FFmpeg is not linked in: its libraries are used as they are built, as DLLs besid
 
 The launcher's backgrounds (`res/launcher/bg_*.jpg`) were generated for abyssport with
 [Magnific](https://www.magnific.ai) (Magnific One) from text alone, and resized; no image of the game was used. The
-icon and the emblem are drawn from code by `tools/art/make_art.py`.
+icon and the emblem are drawn from code by `tools/art/make_art.py`. The two controllers in "How to play"
+(`res/launcher/pad_dualsense.png`, `pad_xbox.png`) are `controller_playstation5.png` and `controller_xboxseries.png`
+from [Kenney](https://kenney.nl)'s Input Prompts 1.5A (CC0), the same pack as `third_party/kenney-prompts`.
 
 ## In the release
 
