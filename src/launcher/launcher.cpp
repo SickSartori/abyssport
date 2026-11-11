@@ -562,7 +562,7 @@ SDL_GPUTexture* Launcher::make_texture(const unsigned char* rgba, int width, int
 
 // The background and the logo, from the player's own copy: sce_sys/pic0.png (the game's picture, blurred here: made
 // small and averaged, the GPU's filter does the rest) and sce_sys/livearea/contents/startup.png (its logo). Until
-// there is a copy, one of abyssport's own pictures (art/bg_*.jpg, tools/art/make_art.py), chosen at random. The
+// there is a copy, one of abyssport's own pictures (art/bg_*.jpg, made with Magnific), chosen at random. The
 // emblem beside the port's name is always ours.
 void Launcher::load_art() {
     int w = 0, h = 0, n = 0;
@@ -573,8 +573,8 @@ void Launcher::load_art() {
         }
     }
     if (!game_ready_) {
-        static const char* const kOwn[] = {"bg_jungle.jpg", "bg_abyss.jpg", "bg_ruins.jpg"};
-        if (unsigned char* picture = stbi_load((exe_directory_ / "art" / kOwn[std::rand() % 3]).string().c_str(), &w, &h, &n, 4)) {
+        static const char* const kOwn[] = {"bg_temple.jpg", "bg_chasm.jpg", "bg_cave.jpg", "bg_ruins.jpg"};
+        if (unsigned char* picture = stbi_load((exe_directory_ / "art" / kOwn[std::rand() % 4]).string().c_str(), &w, &h, &n, 4)) {
             background_ = make_texture(picture, w, h);
             background_width_ = w;
             background_height_ = h;

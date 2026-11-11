@@ -64,6 +64,12 @@ FFmpeg is not linked in: its libraries are used as they are built, as DLLs besid
 | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) | 20261104 (Clang 23.1.5) | Apache 2.0 with LLVM exceptions; mingw-w64's runtime under its own permissive licences | The compiler; its C and C++ libraries and winpthreads are linked into the program |
 | [Ninja](https://ninja-build.org) | 1.13.2 | Apache 2.0 | Runs the build |
 
+## Artwork
+
+The launcher's backgrounds (`res/launcher/bg_*.jpg`) were generated for abyssport with
+[Magnific](https://www.magnific.ai) (Magnific One) from text alone, and resized; no image of the game was used. The
+icon and the emblem are drawn from code by `tools/art/make_art.py`.
+
 ## In the release
 
 `tools/make_package.py` puts these in the release, pinned by version and hash, with their licences in `licenses/`:
