@@ -232,7 +232,7 @@ static uint64_t edge_us(uint64_t e) { return unpaced() ? 0 : vblank0 + e * vb_pe
 /* vb_setbuf (above): the edge count when the frame buffer was last set: the flip lands at the next edge */
 static __thread uint64_t vb_last_target;    /* the edge this thread last waited for */
 /* sleep until edge `target` (at least the next one), counting it for the fixed guest clock */
-/* the overlay (window.c: F10, Escape, a gamepad combo) pauses the game by holding every thread
+/* the overlay (window.c: F1, Escape, a gamepad combo) pauses the game by holding every thread
  * right here, where essentially all of a title's own per-frame pacing already rendezvouses every
  * frame -- and, under RECOMP_CLOCK=fixed, by holding off vblanks_add() until it's done, which holds
  * the fixed guest clock still too; on the real clock display_set_paused (above) does the same. A

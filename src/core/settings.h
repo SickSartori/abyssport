@@ -44,7 +44,7 @@
  *   online_id     np.c        the player's name online, after "ntv_" (at most 10 letters, digits, '-' or '_'; empty:
  *                             a tag of this install's own)
  *   fullscreen    window.c    0 | 1                     also kept when the window's own button (or the OS) changes it
- *   osd           metrics.c   0 | 1 | 2                 the F1 overlay's level
+ *   osd           metrics.c   0 | 1 | 2                 the F10 overlay's level
  *   view_distance hooks.c     1..3 (default 1, the game's own): how much further faded-out scenery reaches
  *                             (Uncharted: the floor's rocks and foliage; RECOMP_VIEW_DISTANCE wins; read live)
  *   fov           hooks.c     a multiplier, 1.0 = the game's own vertical field of view (Unit 13's
@@ -62,7 +62,7 @@
  *   menu_hint_shown  overlay.cpp  1 once the first-launch hint ("move the mouse to the top for the
  *                             menu") has been shown; absent: show it on this game's next windowed run
  *
- * The in-game overlay (host/overlay.cpp: the full menu on F10, Escape, Back+Start or Guide in
+ * The in-game overlay (host/overlay.cpp: the full menu on F1, Escape, Back+Start or Guide in
  * window.c, and the menu bar at the top edge) writes all of these; F2 also writes render_scale.
  *
  * Thread-safe; values are read often (cheap: a short table under a mutex), written rarely.

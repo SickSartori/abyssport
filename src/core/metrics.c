@@ -9,14 +9,14 @@
  * -- see "feeding" below):
  *
  *   - the window title (metrics_title): one line, refreshed ~2 Hz;
- *   - an on-screen overlay (metrics_osd_composite): F1 in window.c cycles off / basic (FPS and
+ *   - an on-screen overlay (metrics_osd_composite): F10 in window.c cycles off / basic (FPS and
  *     frame time only) / full; RECOMP_OSD=0|1|2 sets the start-up level. Default is 0: on the
  *     software path drawing it is nearly free (one blend into a CPU buffer already being built),
  *     but on the GPU path (gfx_gpu.c, this project's actual default) the only way to blend without
  *     adding a shader/pipeline to that file (not written yet; see window.c's comment on
  *     window_present_gpu) is a real download/composite/re-upload round trip with a GPU fence
  *     wait every frame. A performance overlay shouldn't be the thing that costs you the
- *     performance; F1 opts into that cost with eyes open instead. The overlay has no third-party
+ *     performance; F10 opts into that cost with eyes open instead. The overlay has no third-party
  *     font: the glyph table below is hand-drawn, 5x7 dots per character, upscaled and composited
  *     (real alpha, not a flat copy) directly into the CPU pixel buffer that's about to go to the
  *     swapchain -- never guest memory, never a RECOMP_SHOT image;
@@ -50,7 +50,7 @@
 
 static uint64_t now_us(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (uint64_t)t.tv_sec * 1000000 + t.tv_nsec / 1000; }
 
-/* whether anything will ever read these numbers: a window (title bar, F1 overlay), RECOMP_METRICS
+/* whether anything will ever read these numbers: a window (title bar, F10 overlay), RECOMP_METRICS
  * or RECOMP_OSD. Resolved once; while it's 0 (headless runs: the gate, captures, the checker) the
  * hooks below cost one predictable branch and the game's frames see no extra work at all */
 int metrics_on(void) {
@@ -180,7 +180,7 @@ void metrics_set_audio(uint32_t queued_ms, uint32_t ports, uint32_t underruns) {
 	pthread_mutex_lock(&mx); audio_ms = queued_ms; audio_ports = ports; audio_underruns = underruns; pthread_mutex_unlock(&mx);
 }
 
-/* the overlay menu's Performance page ("show fps"): the same number the title bar and the F1
+/* the overlay menu's Performance page ("show fps"): the same number the title bar and the F10
  * overlay already show, as a plain double instead of a drawn line */
 double metrics_fps(void) {
 	double fps, avg_ms, max_ms, low1_ms;
@@ -270,7 +270,7 @@ static uint8_t *osd_buf[2]; static int osd_live, osd_w, osd_h;
 static int osd_level_v = -1;   /* -1: RECOMP_OSD not read yet */
 static char line_full[6][40]; static int n_full;
 
-int metrics_osd_level(void) {   /* F1 (the window's event thread) writes it, every present reads it: atomic */
+int metrics_osd_level(void) {   /* F10 (the window's event thread) writes it, every present reads it: atomic */
 	int v = __atomic_load_n(&osd_level_v, __ATOMIC_RELAXED);
 	if (v < 0) {
 		extern int settings_has(const char *key); extern int settings_int(const char *key, int def);   /* the environment over the game's settings.ini (overlay menu), as render_scale_init (gfx_gpu.c) does */

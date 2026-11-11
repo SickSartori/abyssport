@@ -11,8 +11,8 @@
  * future RECOMP_GFX=gpu backend (gfx_gpu.c) will render into directly instead of blitting.
  *
  * keys: arrows d-pad, Z cross, X circle, A square, S triangle, Enter start, Backspace select,
- *       Q/W L/R triggers; any SDL gamepad (A/B/X/Y as cross/circle/square/triangle); F1 cycles the
- *       performance overlay off / basic (FPS + frame time) / full (metrics.c); F10 (or a gamepad's
+ *       Q/W L/R triggers; any SDL gamepad (A/B/X/Y as cross/circle/square/triangle); F10 cycles the
+ *       performance overlay off / basic (FPS + frame time) / full (metrics.c); F1 (or a gamepad's
  *       Back+Start held together, or its Guide button) opens/closes the in-game menu (overlay.c*,
  *       Dear ImGui), Escape also closes it -- while it's open every key/mouse/gamepad event above
  *       goes to the menu instead, not the game (see the event loop's own comment on why). The mouse
@@ -674,7 +674,7 @@ void window_present_gpu(void *src, uint32_t w, uint32_t h, int raw) {
 	 * translucent overlay onto a frame that's already a GPU texture is to round-trip it through the
 	 * CPU -- download `src`, composite, re-upload into gtex[n] below -- with a GPU fence wait to
 	 * make the download safe to read. That's a real per-frame stall, only worth paying when someone
-	 * actually asked to see the overlay (F1 or RECOMP_OSD=1|2); otherwise this falls through to the
+	 * actually asked to see the overlay (F10 or RECOMP_OSD=1|2); otherwise this falls through to the
 	 * plain same-GPU blit at the bottom, unchanged from before this feature existed. */
 	/* ... which is why, with the ImGui overlay up (overlay_draws_hud: every windowed run), the lines are
 	 * now drawn by ImGui into the swapchain in the present loop below, beside the touch markers
@@ -872,7 +872,7 @@ static int kbm_pstv_said;
 static void kbm_used(void) {
 	if (kbm_pstv_said || !display_pstv_active()) return;
 	kbm_pstv_said = 1;
-	overlay_toast_titled("Controller layout", "The PS TV layout is for a controller: keyboard and mouse don't play the game in it. For them, choose touch controls when the game starts (or [F10] > Game > Controller layout).", 10.0);
+	overlay_toast_titled("Controller layout", "The PS TV layout is for a controller: keyboard and mouse don't play the game in it. For them, choose touch controls when the game starts (or [F1] > Game > Controller layout).", 10.0);
 }
 static void pad_resync(SDL_Gamepad *pad) {   /* L and R as held now (the menu closing): no event says so */
 	for (int k = 0; k < 2; k++) {
@@ -993,7 +993,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			/* the overlay itself: always live, open or not, so it can always be reached and always
 			 * closed. Opening (or re-opening by the same gamepad combo) clears whatever buttons/touch
 			 * were down so the game never sees them as still held on resume. */
-			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F10) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) { if (overlay_is_open()) overlay_close(); else overlay_bar_dismiss(); }   /* (closed: Escape hides the menu bar and its menus) */
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) pad_back = 1;
@@ -1024,7 +1024,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (e.type == SDL_EVENT_FINGER_DOWN || e.type == SDL_EVENT_FINGER_MOTION || e.type == SDL_EVENT_FINGER_UP || e.type == SDL_EVENT_FINGER_CANCELED) { screen_finger(&e); continue; }
 			if ((e.type == SDL_EVENT_MOUSE_MOTION && e.motion.which == SDL_TOUCH_MOUSEID) || ((e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) && e.button.which == SDL_TOUCH_MOUSEID)) continue;
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F12) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (F12)\n"); }
-			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1) metrics_osd_cycle();
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F10) metrics_osd_cycle();
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F5) {   /* a marker in the log: "that just happened" for a bug report (a doubled voice line, a glitch) */
 				static int n; n++; extern uint64_t display_frames(void);
 				fprintf(stderr, "user mark %d at frame %llu\n", n, (unsigned long long)display_frames());
@@ -1162,7 +1162,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (on && pstv) { kbm_used(); on = 0; }
 			static int said;
 			if (on != kbm_on) { extern uint64_t display_frames(void); fprintf(stderr, "    input: %s (%s%s, frame %llu)\n", on ? "keyboard and mouse" : "the controller", strcmp(mode, "auto") ? "Play with: " : "", strcmp(mode, "auto") ? mode : kbm_why[0] ? kbm_why : "start", (unsigned long long)display_frames()); }
-			if (on && !kbm_on && !said) { said = 1; overlay_toast_titled("Keyboard & mouse", "The mouse looks and aims -- hold [Alt] for the cursor\nControls: [F10]", 6.0); }
+			if (on && !kbm_on && !said) { said = 1; overlay_toast_titled("Keyboard & mouse", "The mouse looks and aims -- hold [Alt] for the cursor\nControls: [F1]", 6.0); }
 			kbm_on = on;
 			int want = (on || (window_raw_look() && !pstv)) && settings_int("mouse_look", 1) && !overlay_is_open() && !overlay_dialog_active() && win && (SDL_GetWindowFlags(win) & SDL_WINDOW_INPUT_FOCUS) && !(SDL_GetModState() & SDL_KMOD_ALT);
 			/* SDL's own state, not just ours: the system can drop the capture behind our back (a focus change as
@@ -1348,7 +1348,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 				}
 			}
 		}
-		{	/* the menu just closed (any way: F10, Escape, a pad combo, its Resume button): the sticks moved
+		{	/* the menu just closed (any way: F1, Escape, a pad combo, its Resume button): the sticks moved
 			 * while it had the events -- a stick let go with the menu up would otherwise stay deflected */
 			static int was_open; int open = overlay_is_open() || overlay_dialog_active();   /* (the save dialog too) */
 			if (open && !was_open) { buttons = 0; touch_down = 0; gamepad_touch_release(); for (int i = 0; i < KB_N; i++) kb_binds[i].held = 0; }   /* let go of what was held as it opened */

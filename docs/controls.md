@@ -5,7 +5,7 @@ camera. This page says how each of those is played on a PC, as the program does 
 as it is, taken from Project Nativ: none of it has been played through in abyssport yet.
 
 The launcher (`abyssport.exe`) has a Controls page where every key and mouse button can be changed, and a "How to
-play" tab that shows each of the actions below as a small moving scene. The in-game menu (F10) has the same
+play" tab that shows each of the actions below as a small moving scene. The in-game menu (F1) has the same
 settings.
 
 ## Keyboard and mouse or controller
@@ -69,9 +69,9 @@ Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map
 
 | Key | What it does |
 |---|---|
-| F10 | Opens and closes the in-game menu (settings, controls) |
+| F1 | Opens and closes the in-game menu (settings, controls) |
 | Esc | Closes the menu, or hides the menu bar |
-| F1 | Cycles the performance display |
+| F10 | Cycles the performance display |
 | F2 | Cycles the internal resolution, 1x to 6x |
 | F4 | Turns FSR anti-aliasing off and on |
 | F5 | Writes a marker in the log, for a bug report |

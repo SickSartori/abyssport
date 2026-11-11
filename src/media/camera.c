@@ -10,7 +10,7 @@
  *
  * Frames come from one of three sources (settings "camera", RECOMP_CAMERA wins):
  *   light   (default) a synthetic picture: a dim room, or a bright lamp while the light is on --
- *           F7 or the F10 menu's Controls page toggles it (camera_light_toggle below). The lamp starts
+ *           F7 or the F1 menu's Controls page toggles it (camera_light_toggle below). The lamp starts
  *           as the game's conf says (RECOMP_CAMERA_LAMP=1 in RUN_ENV: on -- Uncharted's, so its
  *           puzzles just work), and the first sceCameraStart says on screen what the camera sees
  *   webcam  the computer's own camera through SDL3's camera API (hold it up to a lamp, as on the Vita);
@@ -208,7 +208,7 @@ static void h_start(Cpu *c) {
 	static int said;   /* what the camera sees, once a session: a puzzle may be waiting on it */
 	if (!said) {
 		said = 1; int src = source();
-		overlay_toast_titled("Camera", src == 1 ? "The game is using the Vita's camera: your Mac's camera stands in for it\nChange it: [F10] > Controls"
+		overlay_toast_titled("Camera", src == 1 ? "The game is using the Vita's camera: your Mac's camera stands in for it\nChange it: [F1] > Controls"
 		              : src == 0 && camera_light() ? "The game is using the Vita's camera: it sees a bright lamp\n[F7] turns it off"
 		              : "The game is using the Vita's camera: it sees a dark room\n[F7] shines a lamp into it", 6.0);
 	}

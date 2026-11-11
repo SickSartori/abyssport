@@ -536,7 +536,7 @@ void recomp_ihook_uc_aspect(Cpu *c, int reg) { widen_aspect_reg(c, reg); }
  *   captures was within its fade end (the largest overshoot 0.1 m), and the lists differ exactly there.
  *   A longer fade alone would only turn the fade into a pop at the list's edge.
  *
- * view_distance k (settings.ini / F10, 1..3; 1 = the game's own): the list becomes the game's own plus
+ * view_distance k (settings.ini / F1, 1..3; 1 = the game's own): the list becomes the game's own plus
  * renderables from the lists of the sample points within R = 18 m * sqrt(k^2 - 1) of the camera (50 m
  * and the nearest 512 points at most -- R then the 512th point's distance), and each fading draw's
  * distances are scaled by

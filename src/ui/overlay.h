@@ -8,7 +8,7 @@
  * the overlay only through these calls, the same way it reaches window.c's other state.
  *
  * Ownership split with window.c (which actually owns the SDL window, the gamepad and the swapchain
- * present loop -- see its own header comment): window.c decides WHEN the overlay opens/closes (F10,
+ * present loop -- see its own header comment): window.c decides WHEN the overlay opens/closes (F1,
  * Escape, a gamepad combo, window_present/window_present_gpu's one-shot RECOMP_OVERLAY_DUMP path)
  * and WHERE it draws (the swapchain texture, after the frame blit); overlay.cpp owns everything
  * about WHAT it draws and reads/writes settings.c directly for persistence.
@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-/* a badge at the top right for `seconds` (any thread): a title (or none) over the text; "[F10]" in the text draws
+/* a badge at the top right for `seconds` (any thread): a title (or none) over the text; "[F1]" in the text draws
  * as a key cap, "\n" breaks the line. Up to three stack, newest on top; the same one again runs on instead */
 void overlay_toast_titled(const char *title, const char *body, double seconds);
 void overlay_toast(const char *msg, double seconds);   /* (no title) */
@@ -56,7 +56,7 @@ void overlay_close(void);
 void overlay_toggle(void);
 /* Game > Pause in the menu bar: the game held without the menu (a banner says so). overlay_game_paused
  * is the one flag display.c and window.c's audio poll: the full menu open OR this pause. Closing the
- * full menu (Resume, Escape, F10) clears this pause too. */
+ * full menu (Resume, Escape, F1) clears this pause too. */
 void overlay_set_paused(int on);
 int overlay_game_paused(void);
 
@@ -98,7 +98,7 @@ typedef struct { float x, y; int rear, pressed, cursor; } OverlayMark;
 /* window.c: the free pointer is a touch cursor this frame (drawn as a mark): the OS arrow is hidden over the picture */
 void overlay_touch_cursor(int on);
 void overlay_marks(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w, uint32_t h, double dt_s, const OverlayMark *marks, int n, const float rear_rect[4]);
-/* overlay_marks also draws the performance overlay (metrics.c's F1 lines, metrics_osd_lines) when its level is
+/* overlay_marks also draws the performance overlay (metrics.c's F10 lines, metrics_osd_lines) when its level is
  * on: the HUD. overlay_draws_hud says whether it will (ImGui up, with a window), so window.c can skip the
  * CPU composite of the same overlay into the frame -- on the GPU path a fence wait + download + re-upload
  * of every frame (window_present_gpu's own comment). RECOMP_OSD_CPU=1 (window.c) keeps that composite.

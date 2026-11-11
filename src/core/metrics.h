@@ -39,7 +39,7 @@ int metrics_title(char *buf, int bufsz);
  * buffer's worth when the next buffer arrived) */
 void metrics_set_audio(uint32_t queued_ms, uint32_t ports, uint32_t underruns);
 
-/* the on-screen overlay: F1's level (0 off, 1 basic FPS+frame time, 2 full) and its cycle;
+/* the on-screen overlay: F10's level (0 off, 1 basic FPS+frame time, 2 full) and its cycle;
  * RECOMP_OSD sets the start-up value. metrics_osd_composite alpha-blends the current overlay
  * bitmap onto `rgba` (tightly packed RGBA8, `stride_px` pixels per row, visible area w x h) at a
  * fixed corner margin -- real translucency against whatever is already there, drawn with this

@@ -13,7 +13,7 @@
  *
  * Two states, one ImGui frame per present (window.c's present loop calls overlay_frame, then
  * overlay_marks; exactly one of them builds, keyed on overlay_is_open()):
- *   - the full menu (build_ui; F10, Escape, Back+Start or Guide in window.c): a tabbed window with
+ *   - the full menu (build_ui; F1, Escape, Back+Start or Guide in window.c): a tabbed window with
  *     every setting, the controls reference and the help page. The game is paused while it's up
  *     (display.c), every event is ImGui's (window.c), keyboard and gamepad navigation are on.
  *   - closed (build_closed): the HUD -- the performance overlay's lines and the gamepad-touch
@@ -30,13 +30,13 @@
  *     the menu, and the OS cursor hidden after a few seconds still over the picture.
  *   - the shader prep card (build_prep): a start whose shader warm-up would take more than a few seconds (gfx_gpu.c's
  *     shader prep: a first start, an update's new recipes, a cleared OS cache) pauses the game under it with the
- *     progress and Skip; it closes by itself when the builds are done. Skipped (or closed any way: Escape, F10, the
+ *     progress and Skip; it closes by itself when the builds are done. Skipped (or closed any way: Escape, F1, the
  *     quit card's Keep playing), the builds go on behind the game with a line in the corner until they're done.
  *   - the touch card (build_intro): the first game a player starts shows it over the game, paused as Game > Pause
  *     pauses it, so input keeps its in-game path (the hidden, captured mouse, Alt's touch pointer, a bumper's
  *     crosshair, the touchpad's marks): how to touch the Vita's screen with a keyboard and mouse, a controller or a
  *     touch screen, the device in use highlighted; done by a real touch on either panel (window_touch_contacts), or
- *     skipped with Escape or F10. Once per player: shared settings key touch_intro_shown.
+ *     skipped with Escape or F1. Once per player: shared settings key touch_intro_shown.
  *   - the quit card (build_quit): a request to close the game window (Cmd+W, Cmd+Q, the close button, Alt+F4) opens it
  *     first, the game paused: Keep playing, or Quit; a second request while it's up quits (window.c).
  *   - headless, one-shot (overlay_render_forced, RECOMP_OVERLAY_DUMP: window.c's own comment) --
@@ -91,10 +91,10 @@ int display_pstv_looked(void);   /* display.c: the game asked for a PS TV's pad 
 void window_pixel_size(uint32_t *w, uint32_t *h);
 int window_aspect_supported(void);
 float window_aspect_widen(void);
-/* metrics.c: the F1 overlay's level, direct (not just cycling) and F1's cycle, and the live fps for the Performance page */
+/* metrics.c: the F10 overlay's level, direct (not just cycling) and F10's cycle, and the live fps for the Performance page */
 int metrics_osd_level(void); void metrics_osd_set(int level); void metrics_osd_cycle(void);
 double metrics_fps(void);
-int metrics_osd_lines(char (*out)[40], int max);   /* the F1 overlay's text, drawn here as the HUD (overlay_marks) */
+int metrics_osd_lines(char (*out)[40], int max);   /* the F10 overlay's text, drawn here as the HUD (overlay_marks) */
 /* settings.c */
 int settings_has(const char *key);
 int settings_int(const char *key, int def);
@@ -158,7 +158,7 @@ int overlay_is_open(void) { return g_ctx && g_open; }
  * or Game > Pause is on, whichever lasts longer (overlay_game_paused is what display.c and window.c's
  * audio actually poll) */
 static void apply_pause(void) { display_set_paused(g_open || g_paused); }
-void overlay_open(void) { if (g_ctx) { intro_end(); g_open = true; apply_pause(); } }   /* (F10 over the touch card: it's skipped) */
+void overlay_open(void) { if (g_ctx) { intro_end(); g_open = true; apply_pause(); } }   /* (F1 over the touch card: it's skipped) */
 static void intro_end(void) {   /* the touch card, done or skipped: never again */
 	if (!g_intro) return;
 	g_intro = false; settings_set_int("touch_intro_shown", 1); settings_save();
@@ -190,7 +190,7 @@ extern "C" { int window_kb_count(void); const char *window_kb_label(int i); cons
 static int g_rebind = -1;   /* the Controls page's Rebind: the next key pressed goes to this action */
 void overlay_process_event(const SDL_Event *event) {
 	if (!g_ctx || !g_has_window) return;
-	if (g_rebind >= 0 && event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) { window_kb_bind(g_rebind, event->key.key); g_rebind = -1; return; }   /* (Escape and F10 close the menu first: window.c) */
+	if (g_rebind >= 0 && event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) { window_kb_bind(g_rebind, event->key.key); g_rebind = -1; return; }   /* (Escape and F1 close the menu first: window.c) */
 	ImGui::SetCurrentContext(g_ctx);
 	ImGui_ImplSDL3_ProcessEvent(event);
 }
@@ -241,8 +241,8 @@ static void set_osd(int level) { metrics_osd_set(level); settings_set_int("osd",
  * beside them -- keep in sync with its event loop). The bar's own shortcut texts name the same keys. */
 static const char *const g_shortcuts[][3] = {
 	{"Menu bar", "Move the mouse to the top edge (Esc hides it)", "Tap the tab at the top centre (touch screen)"},
-	{"This menu (pauses the game)", "F10 (Esc closes it)", "Guide, or Back + Start together"},
-	{"On-screen stats: off, FPS, full", "F1", "\u2014"},
+	{"This menu (pauses the game)", "F1 (Esc closes it)", "Guide, or Back + Start together"},
+	{"On-screen stats: off, FPS, full", "F10", "\u2014"},
 	{"Resolution: 1\u00d7 to 6\u00d7", "F2", "\u2014"},
 	{"The rear camera's lamp", "F7", "\u2014"},
 	{"Capture a frame (to captures/)", "F12", "\u2014"},
@@ -349,7 +349,7 @@ static void page_display(void) {
 }
 static void page_performance(void) {
 	if (!ui::rows_begin("perf")) return;
-	ui::row("On-screen stats", "Frame rate and timings drawn over the game. F1 cycles them.");
+	ui::row("On-screen stats", "Frame rate and timings drawn over the game. F10 cycles them.");
 	{ static const char *const names[3] = {"Off##osd", "FPS##osd", "Full##osd"}; int lvl = metrics_osd_level(); if (ui::segmented(names, 3, &lvl)) set_osd(lvl); }
 	ui::row("Frame rate now");
 	{ char b[32]; std::snprintf(b, sizeof b, "%.0f fps", metrics_fps()); ImGui::PushFont(nullptr, ImGui::GetFontSize() * 1.6f); ImGui::TextUnformatted(b); ImGui::PopFont(); }
@@ -536,7 +536,7 @@ static void page_help(void) {
 	int v = SDL_GetVersion();
 	ImGui::TextDisabled("%s  ·  Dear ImGui %s  ·  SDL %d.%d.%d", title && *title ? title : "unknown title", IMGUI_VERSION, SDL_VERSIONNUM_MAJOR(v), SDL_VERSIONNUM_MINOR(v), SDL_VERSIONNUM_MICRO(v));
 	ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() * 0.3f));
-	ui::muted_wrapped("The menu bar: move the mouse to the top edge of the window (or tap the tab there). This menu: F10, or the PS button; the game pauses while it's up.");
+	ui::muted_wrapped("The menu bar: move the mouse to the top edge of the window (or tap the tab there). This menu: F1, or the PS button; the game pauses while it's up.");
 }
 
 /* ---- the full menu (build_ui): a panel over the paused, dimmed game -- the game's name and a Paused chip, the
@@ -609,7 +609,7 @@ static void build_ui(void) {
 	/* the foot */
 	ImGui::Dummy(ImVec2(0, em * 0.15f));
 	if (ImGui::Button("Capture frame (F12)")) g_want_capture = true;
-	ImGui::SameLine(); ImGui::TextDisabled(SDL_HasGamepad() ? "L1 / R1: sections   Esc, F10 or the PS button closes this menu" : "Esc, F10 or the PS button closes this menu");
+	ImGui::SameLine(); ImGui::TextDisabled(SDL_HasGamepad() ? "L1 / R1: sections   Esc, F1 or the PS button closes this menu" : "Esc, F1 or the PS button closes this menu");
 	const char *quit = quit_label();
 	float qw = ImGui::CalcTextSize(quit).x + ImGui::GetStyle().FramePadding.x * 2;
 	ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - qw);
@@ -654,7 +654,7 @@ static void menu_game(void) {
 	if (ImGui::MenuItem(g_paused ? "Resume" : "Pause")) overlay_set_paused(!g_paused);
 	ImGui::TextUnformatted("Volume"); ImGui::SameLine(); volume_slider();
 	if (ImGui::MenuItem("Capture frame", "F12")) g_want_capture = true;
-	if (ImGui::MenuItem("Full menu…", "F10")) overlay_open();
+	if (ImGui::MenuItem("Full menu…", "F1")) overlay_open();
 	ImGui::Separator();
 	if (ImGui::MenuItem(quit_label())) g_want_quit = true;
 }
@@ -691,7 +691,7 @@ static void menu_view(void) {
 		int lvl = metrics_osd_level();
 		for (int i = 0; i < 3; i++) if (ImGui::MenuItem(names[i], nullptr, lvl == i)) set_osd(i);
 		ImGui::Separator();
-		if (ImGui::MenuItem("Cycle", "F1")) metrics_osd_cycle();
+		if (ImGui::MenuItem("Cycle", "F10")) metrics_osd_cycle();
 		ImGui::EndMenu();
 	}
 }
@@ -811,7 +811,7 @@ static void toasts_take(double t) {
 	g_ntoasts = n;
 }
 /* A toast as a badge at the top right (below the menu bar when it's down): a dark card with an amber edge, the
- * title in amber, the text under it, wrapped to a third of the window; "[F10]" in the text draws as a key cap.
+ * title in amber, the text under it, wrapped to a third of the window; "[F1]" in the text draws as a key cap.
  * It slides in, and fades over its last 0.4 s. */
 struct ToastTok { const char *s; int n; bool key, brk; float w; };
 static int toast_tokens(const char *body, ImFont *font, float fs, float cap_pad, ToastTok *out, int max) {
@@ -870,7 +870,7 @@ static void build_toasts(float w, float hgt, double t) {
 /* Game > Pause (not the menu): the picture stays, with this over it */
 static void build_pause_banner(float w, float hgt) {
 	ImFont *font = ImGui::GetFont(); const float fs = ImGui::GetFontSize() * 2.0f;
-	static const char l1[] = "PAUSED", l2[] = "Game > Resume in the menu bar (mouse to the top), or F10";
+	static const char l1[] = "PAUSED", l2[] = "Game > Resume in the menu bar (mouse to the top), or F1";
 	const ImVec2 s1 = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, l1), s2 = font->CalcTextSizeA(fs * 0.5f, FLT_MAX, 0.0f, l2);
 	const float pad = 12, bw = fmaxf(s1.x, s2.x) + 2 * pad, bh = s1.y + s2.y + 3 * pad;
 	const ImVec2 p0(w * 0.5f - bw * 0.5f, hgt * 0.5f - bh * 0.5f), p1(p0.x + bw, p0.y + bh);
@@ -880,7 +880,7 @@ static void build_pause_banner(float w, float hgt) {
 	dl->AddText(font, fs * 0.5f, ImVec2(w * 0.5f - s2.x * 0.5f, p0.y + 2 * pad + s1.y), IM_COL32(205, 205, 215, 255), l2);
 }
 /* the HUD while the menu is closed: the touch markers (window.c's gamepad touch) and the performance overlay
- * (metrics.c's F1 lines) -- no window, no input, the foreground draw list only */
+ * (metrics.c's F10 lines) -- no window, no input, the foreground draw list only */
 static const OverlayMark *g_marks; static int g_nmarks;
 static float g_rear[4];   /* the rear panel's rows on the picture, in window points (x, y, w, h); w 0: none */
 static char g_osd[6][40]; static int g_nosd;   /* the overlay's lines this frame (metrics_osd_lines) */
@@ -1016,7 +1016,7 @@ static void build_closed(void) {
 			g_toast_checked = true;
 			if (!settings_has("touch_intro_shown")) {   /* the player's first game: the touch card first (it says where the menu is too) */
 				g_intro = true; settings_set_int("menu_hint_shown", 1); settings_save(); g_paused = true; apply_pause();
-			} else if (!settings_has("menu_hint_shown")) { g_toast_until = t + TOAST_S; overlay_toast_titled("Menu", "Move the mouse to the top, or press [F10] or the PS button", TOAST_S); settings_set_int("menu_hint_shown", 1); settings_save(); }
+			} else if (!settings_has("menu_hint_shown")) { g_toast_until = t + TOAST_S; overlay_toast_titled("Menu", "Move the mouse to the top, or press [F1] or the PS button", TOAST_S); settings_set_int("menu_hint_shown", 1); settings_save(); }
 		}
 		const ImVec2 m = io.MousePos;
 		const bool inside = ImGui::IsMousePosValid(&m) && m.x >= 0 && m.x < w && m.y >= 0 && m.y < hgt;   /* (focused but outside the window, e.g. on the title bar: the backend reports a position there too) */
@@ -1040,7 +1040,7 @@ static void build_closed(void) {
 		if (g_touch_cursor && g_bar_vis <= 0 && !popup_open && !io.WantCaptureMouse) ImGui::SetMouseCursor(ImGuiMouseCursor_None);   /* (the touch mark stands in for it) */
 	} else {   /* headless (the dump): no pointer; RECOMP_OVERLAY_DUMP_UI says what to show */
 		if (g_force_bar) { g_bar_vis = 1; g_bar_want = true; }
-		if (g_force_toast) { g_toast_until = t + TOAST_S; g_tab_a = 1; g_force_toast = false; overlay_toast_titled("Menu", "Move the mouse to the top, or press [F10] or the PS button", TOAST_S); overlay_toast_titled("Balance", "[A] [D] tilt left / right", TOAST_S); }
+		if (g_force_toast) { g_toast_until = t + TOAST_S; g_tab_a = 1; g_force_toast = false; overlay_toast_titled("Menu", "Move the mouse to the top, or press [F1] or the PS button", TOAST_S); overlay_toast_titled("Balance", "[A] [D] tilt left / right", TOAST_S); }
 	}
 	{	/* the slide, at a fixed rate either way */
 		const float target = g_bar_want ? 1.0f : 0.0f, step = dt > 0.1f ? 1.0f : dt / SLIDE_S;
@@ -1292,7 +1292,7 @@ static void build_intro(void) {
 	ImGui::Dummy(ImVec2(0, em * 0.2f));
 	if (g_intro_done < 0) { ImGui::PushStyleColor(ImGuiCol_Text, ui::accent); ImGui::TextUnformatted("Try it now to continue."); ImGui::PopStyleColor(); }
 	else ImGui::TextUnformatted("Back to the game.");
-	ui::muted_wrapped("F10 opens the menu, with every control. Esc skips this.");
+	ui::muted_wrapped("F1 opens the menu, with every control. Esc skips this.");
 	ImGui::End();
 	ImGui::PopStyleVar();
 }

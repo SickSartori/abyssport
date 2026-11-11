@@ -2659,7 +2659,7 @@ static const SsaoCamera *ao_camera(void) {   /* the scene's world camera: the mo
  * visible surface writes, whatever order the draws came in and whatever an alpha test cut away. M0: the pass writes the
  * coverage marker (1, 1) (usse_spirv_motion_fragment); M1 writes the vectors. RECOMP_MV_DUMP: the motion target and
  * its colour target as the game queues a frame (mv_capture). */
-/* M4: FSR 3.1 (fsr/fsr.c). Offered where the game's pack says it's verified (RECOMP_FSR_SUPPORTED, from RUN_ENV: the F10
+/* M4: FSR 3.1 (fsr/fsr.c). Offered where the game's pack says it's verified (RECOMP_FSR_SUPPORTED, from RUN_ENV: the F1
  * menu's anti-aliasing choice, settings "fsr"); RECOMP_FSR=1 or =0 forces it either way. Decided once a frame
  * (fsr_update, at present: a menu change applies from the next frame); F4 flips it live until the setting changes. The
  * motion vectors run while it's on (or RECOMP_MV) */

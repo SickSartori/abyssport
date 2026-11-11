@@ -120,7 +120,7 @@ const Texts kItalian = {
      {"Inclinare (travi, scivoli)", "Tieni A o D. Con un controller senza giroscopio usa la levetta sinistra; con il giroscopio inclina il controller."},
      {"Fotocamera verso la luce", "F7 accende e spegne la lampada."},
      {"Con il controller", "Tenendo un dorsale le levette muovono il cursore touch."},
-     {"Menu del port", "F10 apre impostazioni e comandi durante il gioco. F2 cambia risoluzione, F4 l'FSR."}},
+     {"Menu del port", "F1 apre impostazioni e comandi durante il gioco. F2 cambia risoluzione, F4 l'FSR."}},
     {"Avanti (levetta sinistra)", "Indietro", "Sinistra", "Destra", "Croce · salta, arrampicati", "Cerchio · copertura, rotolata",
      "Quadrato · corpo a corpo", "Triangolo · raccogli, interagisci", "L · mira", "R · spara", "Start · pausa", "Select",
      "Croce direzionale su", "Croce direzionale giù", "Croce direzionale sinistra", "Croce direzionale destra"},
@@ -171,7 +171,7 @@ const Texts kEnglish = {
      {"Tilting (beams, slides)", "Hold A or D. A controller without a gyroscope uses its left stick; with one, tilt the controller."},
      {"Camera to the light", "F7 turns the lamp on and off."},
      {"With a controller", "While a bumper is held the sticks move the touch cursor."},
-     {"The port's menu", "F10 opens settings and controls during the game. F2 changes resolution, F4 FSR."}},
+     {"The port's menu", "F1 opens settings and controls during the game. F2 changes resolution, F4 FSR."}},
     {"Forward (left stick)", "Back", "Left", "Right", "Cross · jump, climb", "Circle · cover, roll",
      "Square · melee", "Triangle · pick up, interact", "L · aim", "R · fire", "Start · pause", "Select",
      "D-pad up", "D-pad down", "D-pad left", "D-pad right"},
@@ -1359,8 +1359,8 @@ void Launcher::how_page(float now) {
             finger(ImVec2(c.x + stick.x * px(46), c.y + stick.y * px(24)), false, kGold);
             break;
         }
-        default: {  // the port's menu: F10
-            key(left, "F10", p > 0.12f && p < 0.24f);
+        default: {  // the port's menu: F1
+            key(left, "F1", p > 0.12f && p < 0.24f);
             const ImVec2 c = console(right, 0, false);
             const float open = ease_out(std::clamp((p - 0.2f) / 0.25f, 0.0f, 1.0f)) * (p < 0.9f ? 1.0f : 0.0f);
             if (open > 0.01f) {
