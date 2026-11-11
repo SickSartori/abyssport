@@ -119,14 +119,23 @@ def main():
 
     print("licences and documents", flush=True)
     lic = os.path.join(out, "licenses"); os.makedirs(lic)
+    # only the notices the licences ask for (THIRD_PARTY.md): zlib, SDL, stb and CC0 ask for none
+    mingw = os.path.join(toolchain, "x86_64-w64-mingw32", "share", "mingw32")
     for src, name in ((os.path.join(ROOT, "LICENSE"), "abyssport-GPL-2.0.txt"), (os.path.join(build, "_deps", "ffmpeg-src", "LICENSE.txt"), "FFmpeg.txt"),
-                      (os.path.join(toolchain, "LICENSE.TXT"), "llvm-mingw.txt"), (os.path.join(py, "LICENSE.txt"), "Python.txt"),
-                      (os.path.join(ROOT, "third_party", "fonts", "OFL.txt"), "Barlow-OFL.txt")):
+                      (os.path.join(toolchain, "LICENSE.TXT"), "llvm-mingw.txt"), (os.path.join(mingw, "COPYING.MinGW-w64-runtime.txt"), "mingw-w64-runtime.txt"),
+                      (os.path.join(mingw, "COPYING.winpthreads.txt"), "winpthreads.txt"), (os.path.join(py, "LICENSE.txt"), "Python.txt"),
+                      (os.path.join(ROOT, "third_party", "fonts", "OFL.txt"), "Barlow-OFL.txt"), (os.path.join(ROOT, "third_party", "imgui", "LICENSE.txt"), "DearImGui.txt"),
+                      (os.path.join(ROOT, "third_party", "libatrac9", "LICENSE"), "LibAtrac9.txt"), (os.path.join(ROOT, "third_party", "fidelityfx", "LICENSE.txt"), "FidelityFX.txt"),
+                      (os.path.join(ROOT, "tools", "decrypt", "licenses", "sceutils-LICENSE.txt"), "sceutils.txt"),
+                      (os.path.join(ROOT, "tools", "decrypt", "licenses", "vita-headers-LICENSE.txt"), "vita-headers.txt")):
         if os.path.isfile(src): shutil.copyfile(src, os.path.join(lic, name))
-        else: print("  (no", src + ")")
+        else: die(f"a licence the release must carry is missing: {src}")
+    # vgmstream's ISC notice is the comment that opens the HE-VAG table
+    hevag = open(os.path.join(ROOT, "third_party", "hevag", "hevag_coefs.h"), encoding="utf-8").read()
+    with open(os.path.join(lic, "vgmstream-ISC.txt"), "w", encoding="utf-8", newline="\n") as f: f.write(hevag[:hevag.index("*/") + 2] + "\n")
     for whl in ("capstone", "pycryptodome"):
         for f in glob.glob(os.path.join(glob.escape(py), "Lib", "site-packages", whl + "-*.dist-info", "*LICEN*")): shutil.copyfile(f, os.path.join(lic, f"{whl}-{os.path.basename(f)}.txt"))
-    for f in ("README.md", "THIRD_PARTY.md", "CHANGELOG.md"): shutil.copyfile(os.path.join(ROOT, f), os.path.join(out, f))
+    for f in ("README.md", "THIRD_PARTY.md", "CHANGELOG.md"): shutil.copyfile(os.path.join(ROOT, f), os.path.join(out, f))   # (THIRD_PARTY.md: the licence notices, required)
     copytree(os.path.join(ROOT, "docs"), os.path.join(out, "docs"))
 
     # the GPL's source offer, kept simple: this version's source travels with its programs

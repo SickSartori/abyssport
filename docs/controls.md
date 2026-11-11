@@ -1,8 +1,8 @@
 # Controls
 
 Golden Abyss was made for a console with two sticks, a touch screen, a touch pad on its back, a gyroscope and a
-camera. This page says how each of those is played on a PC, as the program does it today. It describes the code
-as it is, taken from Project Nativ: none of it has been played through in abyssport yet.
+camera. This page says how each of those is played on a PC, as the program does it today; none of it has been
+played through in abyssport yet.
 
 The launcher (`abyssport.exe`) has a Controls page where every key and mouse button can be changed, and a "How to
 play" tab that shows each of the actions below as a small moving scene. The in-game menu (F1) has the same

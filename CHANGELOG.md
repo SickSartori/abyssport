@@ -8,11 +8,11 @@
   its GPU services from the firmware update file) are recompiled to C from the player's own copy and built into the
   program. The intro film, the title, the menus, a new campaign and the prologue play, with sound; saved games are
   written and read back.
-- The runtime, adapted from Project Nativ: the Vita's kernel, files, FIOS and PSARC archives, saved data, the
+- The runtime: the Vita's kernel, files, FIOS and PSARC archives, saved data, the
   software and GPU renderers (through SDL3) with the shader translator, audio (NGS, ATRAC9), films (H.264 through
   FFmpeg's DLLs), touch, motion and controllers, the window, the in-game menu, and the patches for Golden Abyss
   (field of view, wider aspect ratios, 60 fps, mouse look, view distance).
-- The launcher (`abyssport.exe`), in the look of mc3port's and sm2port's: whether the game is ready; the Original,
+- The launcher (`abyssport.exe`): whether the game is ready; the Original,
   Enhanced and Custom styles; picture, effects, game and audio settings; the keyboard's keys and the mouse's five
   buttons, each on any action; and "How to play", a tutorial for keyboard and mouse, a DualSense or an Xbox
   controller (chosen at its top, first guessed from the controller connected; one standard controller with each

@@ -42,15 +42,7 @@ The release: `python tools/make_package.py` puts the launcher, the runtime compi
 an embedded Python and the x86-64 part of llvm-mingw in `dist/abyssport-<version>` and zips it. On the player's PC
 `tools/build_game.py` compiles the game's code and links it to that runtime.
 
-## Credits
-
-abyssport adapts code from two GPL projects, credited in each file that comes from them:
-
-- [Project Nativ](https://github.com/TheLostPantheon/nativ): the recompiler, the runtime and the game's fixes.
-- [Vita3K](https://github.com/Vita3K/Vita3K): the reference for the Vita's system modules, touch and motion.
-
-Other third-party software: [THIRD_PARTY.md](THIRD_PARTY.md).
-
 ## Licence
 
-GNU General Public License, version 2 or (at your option) any later version: [LICENSE](LICENSE).
+GNU General Public License, version 2 or (at your option) any later version: [LICENSE](LICENSE). The notices of the
+third-party code it contains: [THIRD_PARTY.md](THIRD_PARTY.md).
