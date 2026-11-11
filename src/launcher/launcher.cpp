@@ -1562,6 +1562,16 @@ void Launcher::how_page(float now) {
     if (segmented("how_device", t.how_devices, 3, &how_device_, nullptr, panel_width_ / px(1))) how_since_ = now;
     const bool sony = device == 1;
     const bool bumpers = setting("shoulder_buttons", "triggers") == "bumpers";   // L and R on the bumpers: the triggers hold the touch
+    // Keyboard and mouse as this player set them on the other two tabs: the keys that move left and right (they tilt),
+    // and what is L (aim) and R (fire): a mouse button given that action, else its key. Alt, F1 and F7 are fixed.
+    const std::string move_left = setting("bind_move_left", "A"), move_right = setting("bind_move_right", "D");
+    int aim_button = -1, fire_button = -1;
+    for (int m = 4; m >= 0; --m) {   // (the first button with the action wins, as in the runtime)
+        const std::string action = setting(kMouseBinds[m].key, kMouseBinds[m].def);
+        if (action == "l") aim_button = m;
+        if (action == "r") fire_button = m;
+    }
+    const std::string aim_key = setting("bind_l", "Q"), fire_key = setting("bind_r", "R");
 
     if (now >= how_hold_until_ && now - how_since_ >= kLength * 2) {  // two loops each, then the next
         how_item_ = (how_item_ + 1) % kCount;
@@ -1671,19 +1681,42 @@ void Launcher::how_page(float now) {
         {{40.5f, 46.6f}, {71.5f, 63.6f}, 6.5f, {85.5f, 57.5f}, 3.8f, {63.5f, 39.5f}, {55.0f, 49.0f}, {72.0f, 49.0f}, {}, {}},
     };
     const auto pad = [&](ImVec2 c, const Pose& s) {
-        const float size = px(184);  // the drawing's 128 pixels on screen
+        const float size = px(212);  // the drawing's 128 pixels on screen (its body is 95 x 65 of them)
         const auto at = [&](float u, float v) { return rotated(c, ImVec2((u - 64) / 128 * size, (v - 64) / 128 * size), s.tilt); };
         const float unit = size / 128;
         const PadArt& art = kArt[sony ? 0 : 1];
         const ImU32 body = sony ? IM_COL32(232, 232, 238, 255) : IM_COL32(150, 154, 164, 255);
-        const ImU32 back_colour = IM_COL32(96, 96, 104, 255);
-        const auto bar = [&](float u0, float v0, float u1, float v1, bool on) {   // a shoulder button, behind the body
-            list_->AddQuadFilled(at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1), fade(on ? kGold : back_colour));
+        // The shoulders, behind the body and apart: a small rounded trigger above, with its name on it, and the bumper,
+        // a thin bar along the body's top edge, with its name outside it (`side`: -1 left, 1 right, 0 on it). A pressed
+        // one lights up and sinks a little (L1 L2 R1 R2, or LB LT RB RT).
+        const auto shoulder = [&](float u0, float v0, float u1, float v1, float round, bool on, const char* name, float label_size, int side) {
+            const float sink = on ? 1.0f : 0.0f;
+            ImVec2 points[24];
+            int count = 0;
+            for (int corner = 0; corner < 4; ++corner) {   // a rounded rectangle, its corners as quarter circles
+                const float cu = corner == 0 || corner == 3 ? u0 + round : u1 - round, cv = corner < 2 ? v0 + round : v1 - round;
+                for (int k = 0; k < 6; ++k) {
+                    const float angle = 3.14159265f * (1.0f + 0.5f * static_cast<float>(corner) + 0.1f * static_cast<float>(k));
+                    points[count++] = at(cu + std::cos(angle) * round, cv + std::sin(angle) * round + sink);
+                }
+            }
+            list_->AddConvexPolyFilled(points, count, fade(on ? kGold : IM_COL32(74, 74, 84, 255)));
+            list_->AddPolyline(points, count, fade(on ? IM_COL32(255, 228, 160, 255) : IM_COL32(255, 255, 255, 60)), ImDrawFlags_Closed, px(1.2f));
+            const ImVec2 label = measure(body_bold_, px(label_size), name);
+            if (side == 0) {
+                const ImVec2 middle = at((u0 + u1) / 2, (v0 + v1) / 2 + sink);
+                text(body_bold_, px(label_size), ImVec2(middle.x - label.x / 2, middle.y - label.y / 2), on ? IM_COL32(26, 18, 4, 255) : IM_COL32(210, 210, 218, 255), name);
+            } else {
+                const ImVec2 end = at(side < 0 ? u0 - 2 : u1 + 2, (v0 + v1) / 2 - 1);
+                text(body_bold_, px(label_size), ImVec2(side < 0 ? end.x - label.x : end.x, end.y - label.y / 2), on ? kGold : IM_COL32(190, 190, 198, 255), name);
+            }
         };
-        bar(27, 22, 45, 30, s.l2);    // the triggers
-        bar(83, 22, 101, 30, s.r2);
-        bar(22, 28, 48, 34, s.l1);    // the bumpers
-        bar(80, 28, 106, 34, s.r1);
+        static const char* const kShoulderNames[2][4] = {{"L1", "R1", "L2", "R2"}, {"LB", "RB", "LT", "RT"}};
+        const char* const* names = kShoulderNames[sony ? 0 : 1];
+        shoulder(29, 12, 45, 22, 3, s.l2, names[2], 10, 0);       // the triggers
+        shoulder(83, 12, 99, 22, 3, s.r2, names[3], 10, 0);
+        shoulder(22, 25, 48, 31, 2, s.l1, names[0], 10, -1);     // the bumpers, the body covering their lower half
+        shoulder(80, 25, 106, 31, 2, s.r1, names[1], 10, 1);
         if (SDL_GPUTexture* texture = pad_art_[sony ? 0 : 1]) {
             list_->AddImageQuad(ImTextureRef(reinterpret_cast<ImTextureID>(texture)), at(0, 0), at(128, 0), at(128, 128), at(0, 128),
                                 ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1), fade(body));
@@ -1852,7 +1885,7 @@ void Launcher::how_page(float now) {
             break;
         }
     }
-    if (show_pad) pad(ImVec2(left.x, left.y + px(8)), pose);
+    if (show_pad) pad(ImVec2(left.x, left.y + px(12)), pose);   // (its shoulders rise above the body: lower, centred)
     list_->PopClipRect();
     arrow(ImVec2(a.x + px(250), (a.y + b.y) / 2), ImVec2(a.x + px(282), (a.y + b.y) / 2), IM_COL32(255, 255, 255, 60));
     cursor_ += px(200) + px(12);
