@@ -42,6 +42,13 @@ The release: `python tools/make_package.py` puts the launcher, the runtime compi
 an embedded Python and the x86-64 part of llvm-mingw in `dist/abyssport-<version>` and zips it. On the player's PC
 `tools/build_game.py` compiles the game's code and links it to that runtime.
 
+## Supporting the project
+
+abyssport is free and always will be: no paid builds, no early access, no locked features. If you enjoy it and want
+to say thanks, you can support its author on [GitHub Sponsors](https://github.com/sponsors/SickSartori) or
+[Ko-fi](https://ko-fi.com/sicksartori). It is never needed to play, and it buys nothing: it gives more time for fixes,
+features and the next port.
+
 ## Licence
 
 GNU General Public License, version 2 or (at your option) any later version: [LICENSE](LICENSE). The notices of the
