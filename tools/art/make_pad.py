@@ -35,6 +35,19 @@ def main():
         open(svg, "w", encoding="utf-8", newline="\n").write(s)
         subprocess.run(["magick", "-background", "none", "-density", "40", "MSVG:" + svg, "-resize", "512x", png], check=True)
     print("wrote", png)
+    # the drawing's own bumpers, as a mask the launcher lights up (left half: L1/LB, right half: R1/RB): their bluish
+    # greys (slate, its lit edge) at the top, left and right of the middle (the same grey, between them)
+    from PIL import Image
+    pad = Image.open(png).convert("RGBA")
+    mask = Image.new("RGBA", pad.size, (255, 255, 255, 0))
+    w, h = pad.size
+    for y in range(int(h * 0.28)):
+        for x in range(w):
+            r, g, b, a = pad.getpixel((x, y))
+            slate = a > 128 and 60 < r < 200 and b - r >= 4
+            if slate and (x < w * 0.36 or x > w * 0.64): mask.putpixel((x, y), (255, 255, 255, a))
+    mask.save(os.path.join(OUT, "pad_bumpers.png"), optimize=True)
+    print("wrote the bumpers' mask")
 
 
 if __name__ == "__main__":

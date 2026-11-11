@@ -426,6 +426,7 @@ private:
     SDL_GPUTextureFormat format_ = SDL_GPU_TEXTUREFORMAT_INVALID;
     SDL_GPUTexture *background_ = nullptr, *logo_ = nullptr, *emblem_ = nullptr;
     SDL_GPUTexture* pad_art_ = nullptr;   // "how to play": the controller (art/pad.png, tools/art/make_pad.py)
+    SDL_GPUTexture* pad_bumpers_ = nullptr;   // ... and its bumpers, to light up (art/pad_bumpers.png)
     bool background_is_game_ = false;   // the game's own picture, not one of ours (art/bg_*.jpg)
     int background_width_ = 0, background_height_ = 0, logo_width_ = 0, logo_height_ = 0;
     int width_ = 0, height_ = 0;
@@ -546,6 +547,7 @@ void Launcher::stop() {
         if (logo_) SDL_ReleaseGPUTexture(device_, logo_);
         if (emblem_) SDL_ReleaseGPUTexture(device_, emblem_);
         if (pad_art_) SDL_ReleaseGPUTexture(device_, pad_art_);
+        if (pad_bumpers_) SDL_ReleaseGPUTexture(device_, pad_bumpers_);
         if (window_) SDL_ReleaseWindowFromGPUDevice(device_, window_);
         SDL_DestroyGPUDevice(device_);
     }
@@ -620,6 +622,10 @@ void Launcher::load_art() {
         }
         if (unsigned char* art = stbi_load((exe_directory_ / "art" / "pad.png").string().c_str(), &w, &h, &n, 4)) {
             pad_art_ = make_texture(art, w, h);
+            stbi_image_free(art);
+        }
+        if (unsigned char* art = stbi_load((exe_directory_ / "art" / "pad_bumpers.png").string().c_str(), &w, &h, &n, 4)) {
+            pad_bumpers_ = make_texture(art, w, h);
             stbi_image_free(art);
         }
     }
@@ -1656,13 +1662,11 @@ void Launcher::how_page(float now) {
     };
 
     // A controller: one standard drawing for the DualSense and the Xbox alike (art/pad.png, 512 x 417 pixels; the places
-    // below are its pixels), with the face buttons' symbols drawn on it -- the PlayStation shapes or A B X Y -- and, for
-    // a DualSense, its touchpad and PS button. What the scene presses lights up in gold.
+    // below are its pixels), with the face buttons' symbols drawn on it: the PlayStation shapes or A B X Y. What the
+    // scene presses lights up in gold.
     struct Pose {
         ImVec2 ls{}, rs{};
-        bool l1 = false, r1 = false, l2 = false, r2 = false, south = false, guide = false, back = false, start = false;
-        bool touch = false;
-        ImVec2 touch_at{0.5f, 0.5f};  // on the touchpad, 0..1
+        bool l1 = false, r1 = false, l2 = false, r2 = false, south = false, back = false, start = false;
         float tilt = 0;
     };
     const auto pad = [&](ImVec2 c, const Pose& s) {
@@ -1701,8 +1705,19 @@ void Launcher::how_page(float now) {
             list_->AddImageQuad(ImTextureRef(reinterpret_cast<ImTextureID>(pad_art_)), at(0, 0), at(512, 0), at(512, 417), at(0, 417),
                                 ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1), fade(IM_COL32_WHITE));
         }
-        shoulder(96, 86, 174, 106, 9, s.l1, names[0], -1, IM_COL32(94, 108, 122, 255));    // the bumpers, over the drawing's
-        shoulder(338, 86, 416, 106, 9, s.r1, names[1], 1, IM_COL32(94, 108, 122, 255));
+        // the bumpers are the drawing's own: a pressed one lights up through art/pad_bumpers.png (its left half L1/LB,
+        // its right half R1/RB); their names beside them
+        for (int side = 0; side < 2; ++side) {
+            const bool on = side ? s.r1 : s.l1;
+            if (on && pad_bumpers_) {
+                const float u0 = side ? 256.0f : 0.0f, u1 = side ? 512.0f : 256.0f;
+                list_->AddImageQuad(ImTextureRef(reinterpret_cast<ImTextureID>(pad_bumpers_)), at(u0, 0), at(u1, 0), at(u1, 417), at(u0, 417),
+                                    ImVec2(u0 / 512, 0), ImVec2(u1 / 512, 0), ImVec2(u1 / 512, 1), ImVec2(u0 / 512, 1), fade(kGold));
+            }
+            const ImVec2 size = measure(body_bold_, px(11), names[side]);
+            const ImVec2 end = at(side ? 434.0f : 78.0f, 100.0f);
+            text(body_bold_, px(11), ImVec2(side ? end.x : end.x - size.x, end.y - size.y / 2), on ? kGold : IM_COL32(190, 190, 198, 255), names[side]);
+        }
 
         const auto stick = [&](ImVec2 hole, ImVec2 move) {   // a stick pushed: its cap, in gold, off the centre
             if (move.x * move.x + move.y * move.y < 0.04f) return;
@@ -1737,25 +1752,9 @@ void Launcher::how_page(float now) {
                 list_->AddRect(ImVec2(q.x - r * 0.85f, q.y - r * 0.85f), ImVec2(q.x + r * 0.85f, q.y + r * 0.85f), colour, 0, 0, line);
             }
         }
-        // the small buttons in the middle (View and Menu, Create and Options); the guide: the Xbox's above them, a
-        // DualSense's PS button below, its touchpad above
+        // the two small buttons in the middle: Create and Options, or View and Menu
         if (s.back) list_->AddCircleFilled(at(231.9f, 189.1f), k * 10, fade(kGold), 14);
         if (s.start) list_->AddCircleFilled(at(280.1f, 189.1f), k * 10, fade(kGold), 14);
-        if (sony) {
-            const ImVec2 p0 = at(212, 118), p1 = at(300, 118), p2 = at(300, 166), p3 = at(212, 166);
-            list_->AddQuadFilled(p0, p1, p2, p3, fade(IM_COL32(58, 58, 66, 255)));
-            list_->AddQuad(p0, p1, p2, p3, fade(ink), px(1.5f));
-            if (s.touch) {
-                const ImVec2 f = at(212 + 88 * s.touch_at.x, 118 + 48 * s.touch_at.y);
-                list_->AddCircleFilled(f, k * 8, fade(kGold), 14);
-                list_->AddCircle(f, k * 14, fade(kGold, 0.5f), 16, px(1.5f));
-            }
-            list_->AddCircleFilled(at(256, 232), k * 9, fade(s.guide ? kGold : IM_COL32(60, 60, 68, 255)), 16);
-            list_->AddCircle(at(256, 232), k * 9, fade(ink), 16, px(1.2f));
-        } else {
-            list_->AddCircleFilled(at(256, 146), k * 14, fade(s.guide ? kGold : IM_COL32(60, 60, 68, 255)), 20);
-            list_->AddCircle(at(256, 146), k * 14, fade(ink), 20, px(1.5f));
-        }
     };
 
     const float span = std::clamp((p - 0.15f) / 0.6f, 0.0f, 1.0f);  // a movement in the loop's middle
@@ -1794,11 +1793,7 @@ void Launcher::how_page(float now) {
             if (kbm) {
                 key(ImVec2(left.x - px(58), left.y), "Alt", true);
                 mouse(ImVec2(left.x + px(40), left.y), pressed && !rear, pressed && rear);
-            } else if (sony) {  // a finger on the touchpad; R1 (R2) held for the back
-                pose.touch = pressed;
-                pose.touch_at = ImVec2(0.2f + 0.45f * q, 0.8f - 0.5f * q);
-                if (rear) (bumpers ? pose.r2 : pose.r1) = true;
-            } else {  // the cursor: a shoulder held, the stick moves it, A touches
+            } else {  // the cursor: a shoulder held, the stick moves it, Cross / A touches (a DualSense's touchpad: the text)
                 (rear ? (bumpers ? pose.r2 : pose.r1) : (bumpers ? pose.l2 : pose.l1)) = true;
                 pose.ls = p < 0.5f ? ImVec2(0.7f, -0.7f) : ImVec2();
                 pose.south = pressed;
@@ -1816,9 +1811,6 @@ void Launcher::how_page(float now) {
             if (kbm) {
                 key(ImVec2(left.x - px(58), left.y), "Alt", true);
                 mouse(ImVec2(left.x + px(40) + px(14) * std::sin(turn * 3), left.y), pressed, false);
-            } else if (sony) {
-                pose.touch = pressed;
-                pose.touch_at = ImVec2(0.1f + 0.8f * span, 0.5f + 0.3f * std::sin(span * 18.85f));
             } else {
                 (bumpers ? pose.l2 : pose.l1) = true;
                 pose.south = pressed;
@@ -1909,7 +1901,7 @@ void Launcher::how_page(float now) {
         default: {  // the port's menu
             const bool press = p > 0.12f && p < 0.24f;
             if (kbm) key(left, "F1", press);
-            else pose.guide = press;
+            else pose.back = pose.start = press;   // the two middle buttons together (or the PS / Xbox button: the text)
             const ImVec2 c = console(right, 0, false);
             const float open = ease_out(std::clamp((p - 0.2f) / 0.25f, 0.0f, 1.0f)) * (p < 0.9f ? 1.0f : 0.0f);
             if (open > 0.01f) {
