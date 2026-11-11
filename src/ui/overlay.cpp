@@ -179,9 +179,9 @@ int overlay_quit_confirm(void) {   /* (window.c, on a request to close the windo
 	if (!g_ctx || !g_has_window || g_quit_card) return 0;
 	g_quit_card = true; overlay_open(); return 1;
 }
-/* quitting a game the launcher started (ATIV_LAUNCHER, hub.cpp) returns to the launcher's library, which comes to the
- * front: the button says so */
-static const char *quit_label(void) { return std::getenv("ATIV_LAUNCHER") ? "Back to the library" : "Quit game"; }
+/* quitting a game the launcher started (ABYSS_LAUNCHER, launcher.cpp's start_game) brings the launcher back, where the
+ * settings that need a restart change: the button says so */
+static const char *quit_label(void) { return std::getenv("ABYSS_LAUNCHER") ? "Back to the launcher" : "Quit game"; }
 int overlay_wants_capture(void) { return g_want_capture.exchange(false); }
 
 extern "C" { int window_kb_count(void); const char *window_kb_label(int i); const char *window_kb_key_name(int i);

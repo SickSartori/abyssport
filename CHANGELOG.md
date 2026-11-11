@@ -18,8 +18,10 @@
   controller (chosen at its top, first guessed from the controller connected; one standard controller with each
   one's button symbols, lighting up as the scene presses them; the keys and buttons shown are the ones set on
   the other tabs): nine small moving scenes that show
-  how the console's touch screen, rear pad, tilt, camera, aiming and the port's menu are played with that device. In Italian and English.
-  Play starts the game and the launcher comes back when it ends.
+  how the console's touch screen, rear pad, tilt, camera, aiming and the port's menu are played with that device. In
+  Italian, English, Portuguese (Brazil) and Spanish, chosen from Windows' language.
+  Play starts the game and the launcher comes back when it ends; the in-game menu's "Back to the launcher" does the
+  same, for the settings that need a restart.
 - `tools/make_game.py`: the game's code and data made from your own copy and Sony's firmware update file (3.74), in
   one step. The decrypter, the analyser and the recompiler it runs are in `tools/`.
 - The build: llvm-mingw and Ninja, fetched by `tools/get_toolchain.py` (nothing is installed), with the `pc-x64`

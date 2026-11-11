@@ -9,7 +9,8 @@
 // For scripts: ABYSS_LAUNCHER_SHOT=<file.png> saves the window's picture once the opening animation is over and
 // quits; ABYSS_LAUNCHER_PAGE=0..3 and ABYSS_LAUNCHER_TAB=n choose what it shows. ABYSS_LAUNCHER_AUTOPLAY=<seconds>
 // presses Play by itself and quits when the game ends. ABYSS_LAUNCHER_PREPARE=<copy>|<PUP> (a release) chooses the
-// two, presses Prepare, and quits when it ends: exit code 0 when the game is then ready.
+// two, presses Prepare, and quits when it ends: exit code 0 when the game is then ready. ABYSS_LAUNCHER_LANGUAGE=
+// en|it|pt|es speaks that language.
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -70,7 +71,7 @@ struct Texts {
     const char *frame_rate, *frame_rate_detail;
     const char *anisotropy;
     const char *fsr, *fsr_detail, *post_aa, *post_aa_detail, *sharpen, *ssao, *ssao_detail, *shadows, *shadow_names[3];
-    const char *fov, *fov_detail, *view_distance, *view_distance_detail, *language, *language_names[3];
+    const char *fov, *fov_detail, *view_distance, *view_distance_detail, *language, *language_names[5];
     const char *volume, *no, *yes;
     const char *controls_lead, *tab_keys, *tab_mouse, *tab_how;
     const char *press_key, *default_keys, *none;
@@ -89,6 +90,7 @@ struct Texts {
     // the first run: the game made from the player's copy (tools/make_game.py, tools/build_game.py)
     const char *copy, *copy_none, *pup, *pup_none, *choose, *prepare, *cancel, *failed, *space, *duration, *compile_only;
     const char *steps[7];
+    const char *enter;  // the key's name in the hints
 };
 
 const Texts kItalian = {
@@ -110,7 +112,7 @@ const Texts kItalian = {
     "FSR 3.1", "Anti-aliasing e ricostruzione di AMD", "Bordi morbidi", "Anti-aliasing sull'immagine finita", "Nitidezza",
     "Occlusione ambientale", "Ombre morbide negli angoli e nei contatti", "Ombre", {"Originali", "Morbide", "Più morbide"},
     "Campo visivo", "1.00 è quello del gioco", "Distanza visiva", "Rocce e vegetazione spariscono più lontano",
-    "Lingua del launcher", {"Automatica", "Italiano", "English"},
+    "Lingua del launcher", {"Automatica", "Italiano", "English", "Português", "Español"},
     "Volume", "No", "Sì",
     "I controller funzionano così come sono. Qui scegli tasti e mouse, e vedi come si gioca senza touch.",
     "Tastiera", "Mouse e controller", "Come si gioca",
@@ -168,6 +170,7 @@ const Texts kItalian = {
     "Il gioco è pronto ma va compilato per questa versione del port: circa 6 minuti.",
     {"Decrittazione del firmware", "Decrittazione del gioco", "Controllo della versione 1.00", "Analisi del codice",
      "Codice ARM in C", "Compilazione", "Collegamento"},
+    "Invio",
 };
 
 const Texts kEnglish = {
@@ -189,7 +192,7 @@ const Texts kEnglish = {
     "FSR 3.1", "AMD's anti-aliasing and reconstruction", "Soft edges", "Anti-aliasing on the finished picture", "Sharpness",
     "Ambient occlusion", "Soft shadows in corners and contacts", "Shadows", {"Original", "Soft", "Softer"},
     "Field of view", "1.00 is the game's own", "View distance", "Rocks and foliage fade out further away",
-    "Launcher language", {"Automatic", "Italiano", "English"},
+    "Launcher language", {"Automatic", "Italiano", "English", "Português", "Español"},
     "Volume", "No", "Yes",
     "Controllers work as they are. Here you choose keys and mouse, and see how to play without touch.",
     "Keyboard", "Mouse and controller", "How to play",
@@ -247,6 +250,7 @@ const Texts kEnglish = {
     "The game is ready but must be compiled for this version of the port: about 6 minutes.",
     {"Decrypting the firmware", "Decrypting the game", "Checking version 1.00", "Analysing the code",
      "ARM code to C", "Compiling", "Linking"},
+    "Enter",
 };
 
 std::string setting(const char* key, const char* def) {
@@ -254,13 +258,178 @@ std::string setting(const char* key, const char* def) {
     return settings_str(key, def, buffer, sizeof(buffer));
 }
 
-bool italian() {
-    const std::string language = setting("launcher_language", "auto");
-    if (language == "it") return true;
-    if (language == "en") return false;
-    return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_ITALIAN;
+const Texts kPortuguese = {
+    "JOGAR", "CONFIGURAÇÕES", "CONTROLES", "SOBRE", "SAIR",
+    "PRONTO PARA JOGAR", "A selva do Panamá está esperando.", "ANTES DE COMEÇAR", "Ainda falta algo para jogar.",
+    "Jogo pronto", "Jogo a preparar",
+    "Execute tools/make_game.py com sua cópia do jogo e o arquivo do firmware",
+    "Programa do jogo não encontrado", "abyss.exe deve ficar ao lado do launcher",
+    "Controle conectado", "Reconhecido e mapeado sozinho", "Nenhum controle", "Teclado e mouse funcionam",
+    "Estilo", {"Original", "Aprimorado", "Personalizado"},
+    {"Como no console: 30 fps, resolução nativa", "Resolução da tela, filtros e sombras melhores", "Suas escolhas"},
+    "Alterar",
+    "Imagem", "Efeitos", "Jogo", "Áudio",
+    "Proporção", "Mais larga: o jogo mostra mais da cena nas laterais", {"16:9", "21:9", "32:9", "Janela"},
+    "Modo de janela", "F11 durante o jogo", {"Janela", "Tela cheia"},
+    "Resolução interna", "Bordas mais suaves, mais trabalho para a placa de vídeo",
+    "Quadros por segundo", "30 como no console; 60 é experimental",
+    "Filtragem de texturas",
+    "FSR 3.1", "Anti-aliasing e reconstrução da AMD", "Bordas suaves", "Anti-aliasing na imagem final", "Nitidez",
+    "Oclusão de ambiente", "Sombras suaves em cantos e contatos", "Sombras", {"Originais", "Suaves", "Mais suaves"},
+    "Campo de visão", "1.00 é o do jogo", "Distância de visão", "Rochas e vegetação somem mais longe",
+    "Idioma do launcher", {"Automático", "Italiano", "English", "Português", "Español"},
+    "Volume", "Não", "Sim",
+    "Os controles funcionam como estão. Aqui você escolhe teclas e mouse, e vê como jogar sem toque.",
+    "Teclado", "Mouse e controle", "Como jogar",
+    "Pressione uma tecla...", "Teclas padrão", "nenhuma",
+    "Comandos", "Automático segue o último dispositivo usado", {"Automático", "Controle", "Teclado e mouse"},
+    "Sensibilidade do mouse", "Mouse invertido", "Botões L e R", "Nos gatilhos ou nos botões de ombro do controle",
+    {"Gatilhos", "Ombros"}, "Giroscópio do controle", "DualShock 4, DualSense e Switch Pro: inclinam como o console",
+    "Com o mouse capturado, seus botões são ações. Clique para alterar, clique direito para voltar.",
+    {"Botão esquerdo", "Botão direito", "Botão do meio", "Lateral 1", "Lateral 2"},
+    "O jogo foi feito para tela de toque, touch traseiro, giroscópio e câmera. Escolha com o que você joga: cada cena mostra como.",
+    {"Teclado e mouse", "DualSense", "Xbox"},
+    {"Olhar ao redor", "Tocar a tela", "Touch traseiro", "Esfregar, desenhar", "Deslizar",
+     "Inclinar", "A lâmpada da câmera", "Mirar e atirar", "O menu do port"},
+    {{"Mova o mouse: o jogo o captura e a visão o segue.",
+      "Segure Alt: o cursor vira um dedo. O botão esquerdo toca a tela.",
+      "Com Alt pressionado, o botão direito toca a parte de trás do console.",
+      "Com Alt pressionado, arraste o cursor. Formas desenhadas com o mouse são aceitas com mais tolerância.",
+      "Quando o jogo pedir para deslizar, arraste com o botão esquerdo, mesmo com o mouse capturado.",
+      "Em vigas e rampas segure {ML} ou {MR}: o console se inclina para esse lado e volta reto quando você solta.",
+      "F7 liga e desliga a lâmpada que o jogo vê pela câmera traseira.",
+      "Para mirar: {AIM}. Para atirar: {FIRE}. Eles mudam nas abas Teclado e Mouse e controle.",
+      "F1 abre configurações e comandos durante o jogo. F2 muda a resolução, F4 o FSR."},
+     {"Analógico direito.",
+      "Toque o touchpad: ele é a tela do console. Ou segure {T}, mova o cursor com um analógico e aperte Xis.",
+      "Segure {TR} e toque o touchpad: você toca a parte de trás. Ou segure {TR}, mova um analógico e aperte Xis.",
+      "Arraste o dedo no touchpad. Ou segure {T} e Xis e mova o analógico.",
+      "Quando o jogo pedir para deslizar, dê um toque no analógico direito nessa direção.",
+      "Incline o controle: o giroscópio faz o papel do console. R3 o endireita.",
+      "F7 no teclado: o controle não tem um botão livre para a lâmpada.",
+      "{A} para mirar, {F} para atirar.",
+      "Botão PS, ou Create e Options juntos."},
+     {"Analógico direito.",
+      "Segure {T}: aparece o cursor. Mova-o com um analógico e aperte A para tocar.",
+      "Segure {TR}: o cursor passa para a parte de trás. Mova-o com um analógico e aperte A para tocar.",
+      "Segure {T} e A e mova o analógico: o cursor desenha.",
+      "Quando o jogo pedir para deslizar, dê um toque no analógico direito nessa direção.",
+      "Sem giroscópio, inclina-se com o analógico esquerdo, para a direita e para a esquerda.",
+      "F7 no teclado: o controle não tem um botão livre para a lâmpada.",
+      "{A} para mirar, {F} para atirar.",
+      "Botão Xbox, ou Exibir e Menu juntos."}},
+    {"Frente (analógico esquerdo)", "Trás", "Esquerda", "Direita", "Xis · pular, escalar", "Círculo · cobertura, rolar",
+     "Quadrado · corpo a corpo", "Triângulo · pegar, interagir", "L · mirar", "R · atirar", "Start · pausa", "Select",
+     "Direcional para cima", "Direcional para baixo", "Direcional para a esquerda", "Direcional para a direita"},
+    "Uncharted: Golden Abyss recompilado para PC. Você precisa da sua própria cópia do jogo: nada do jogo é distribuído.",
+    "Versão", "Licença", "GNU General Public License, versão 2 ou posterior",
+    "Jogos salvos", "Abrir a pasta",
+    "Jogo", "pronto", "a preparar", "Controle", "conectado", "não conectado", "Versão",
+    "Mover", "Selecionar", "Voltar", "Páginas", "Abas",
+    "Iniciando o jogo...",
+    "Sua cópia do jogo", "A pasta PCSA00029 copiada do console, com sce_sys/package/work.bin",
+    "O arquivo do firmware", "PSVUPDAT.PUP, atualização 3.74 do sistema do PS Vita",
+    "Escolher", "PREPARAR", "Cancelar", "A preparação falhou",
+    "São necessários pelo menos %d GB livres em %s",
+    "Só uma vez: cerca de 15 minutos. O jogo é descriptografado, recompilado e compilado neste PC.",
+    "O jogo está pronto, mas precisa ser compilado para esta versão do port: cerca de 6 minutos.",
+    {"Descriptografando o firmware", "Descriptografando o jogo", "Verificando a versão 1.00", "Analisando o código",
+     "Código ARM em C", "Compilando", "Vinculando"},
+    "Enter",
+};
+
+const Texts kSpanish = {
+    "JUGAR", "AJUSTES", "CONTROLES", "ACERCA DE", "SALIR",
+    "LISTO PARA JUGAR", "La selva de Panamá te espera.", "ANTES DE EMPEZAR", "Aún falta algo para jugar.",
+    "Juego listo", "Juego por preparar",
+    "Ejecuta tools/make_game.py con tu copia del juego y el archivo del firmware",
+    "No se encontró el programa del juego", "abyss.exe debe estar junto al launcher",
+    "Mando conectado", "Reconocido y asignado solo", "Ningún mando", "Teclado y ratón funcionan",
+    "Estilo", {"Original", "Mejorado", "Personalizado"},
+    {"Como en la consola: 30 fps, resolución nativa", "Resolución de la pantalla, mejores filtros y sombras", "Tus elecciones"},
+    "Cambiar",
+    "Imagen", "Efectos", "Juego", "Audio",
+    "Relación de aspecto", "Más ancha: el juego muestra más escena a los lados", {"16:9", "21:9", "32:9", "Ventana"},
+    "Modo de ventana", "F11 durante el juego", {"Ventana", "Pantalla completa"},
+    "Resolución interna", "Bordes más suaves, más trabajo para la tarjeta gráfica",
+    "Fotogramas por segundo", "30 como en la consola; 60 es experimental",
+    "Filtrado de texturas",
+    "FSR 3.1", "Antialiasing y reconstrucción de AMD", "Bordes suaves", "Antialiasing sobre la imagen final", "Nitidez",
+    "Oclusión ambiental", "Sombras suaves en esquinas y contactos", "Sombras", {"Originales", "Suaves", "Más suaves"},
+    "Campo de visión", "1.00 es el del juego", "Distancia de visión", "Rocas y vegetación desaparecen más lejos",
+    "Idioma del launcher", {"Automático", "Italiano", "English", "Português", "Español"},
+    "Volumen", "No", "Sí",
+    "Los mandos funcionan tal cual. Aquí eliges teclas y ratón, y ves cómo se juega sin pantalla táctil.",
+    "Teclado", "Ratón y mando", "Cómo se juega",
+    "Pulsa una tecla...", "Teclas predeterminadas", "ninguna",
+    "Controles", "Automático sigue el último dispositivo usado", {"Automático", "Mando", "Teclado y ratón"},
+    "Sensibilidad del ratón", "Ratón invertido", "Botones L y R", "En los gatillos o en los botones superiores del mando",
+    {"Gatillos", "Superiores"}, "Giroscopio del mando", "DualShock 4, DualSense y Switch Pro: se inclinan como la consola",
+    "Con el ratón capturado sus botones son acciones. Clic para cambiar, clic derecho para volver.",
+    {"Botón izquierdo", "Botón derecho", "Botón central", "Lateral 1", "Lateral 2"},
+    "El juego se hizo para pantalla táctil, panel táctil trasero, giroscopio y cámara. Elige con qué juegas: cada escena muestra cómo.",
+    {"Teclado y ratón", "DualSense", "Xbox"},
+    {"Mirar alrededor", "Tocar la pantalla", "Panel táctil trasero", "Frotar, dibujar", "Deslizar",
+     "Inclinar", "La lámpara de la cámara", "Apuntar y disparar", "El menú del port"},
+    {{"Mueve el ratón: el juego lo captura y la vista lo sigue.",
+      "Mantén Alt: el cursor se vuelve un dedo. El botón izquierdo toca la pantalla.",
+      "Con Alt pulsado, el botón derecho toca la parte trasera de la consola.",
+      "Con Alt pulsado, arrastra el cursor. Las formas dibujadas con el ratón se aceptan con más tolerancia.",
+      "Cuando el juego pide deslizar, arrastra con el botón izquierdo, incluso con el ratón capturado.",
+      "En vigas y rampas mantén {ML} o {MR}: la consola se inclina hacia ese lado y vuelve recta al soltar.",
+      "F7 enciende y apaga la lámpara que el juego ve con la cámara trasera.",
+      "Para apuntar: {AIM}. Para disparar: {FIRE}. Se cambian en las pestañas Teclado y Ratón y mando.",
+      "F1 abre ajustes y controles durante el juego. F2 cambia la resolución, F4 el FSR."},
+     {"Joystick derecho.",
+      "Toca el panel táctil: es la pantalla de la consola. O mantén {T}, mueve el cursor con un joystick y pulsa Equis.",
+      "Mantén {TR} y toca el panel táctil: tocas la parte trasera. O mantén {TR}, mueve un joystick y pulsa Equis.",
+      "Arrastra el dedo por el panel táctil. O mantén {T} y Equis y mueve el joystick.",
+      "Cuando el juego pide deslizar, da un toque al joystick derecho en esa dirección.",
+      "Inclina el mando: su giroscopio hace de consola. R3 lo endereza.",
+      "F7 en el teclado: el mando no tiene un botón libre para la lámpara.",
+      "{A} para apuntar, {F} para disparar.",
+      "Botón PS, o Create y Options a la vez."},
+     {"Joystick derecho.",
+      "Mantén {T}: aparece el cursor. Muévelo con un joystick y pulsa A para tocar.",
+      "Mantén {TR}: el cursor pasa a la parte trasera. Muévelo con un joystick y pulsa A para tocar.",
+      "Mantén {T} y A y mueve el joystick: el cursor dibuja.",
+      "Cuando el juego pide deslizar, da un toque al joystick derecho en esa dirección.",
+      "Sin giroscopio se inclina con el joystick izquierdo, a derecha e izquierda.",
+      "F7 en el teclado: el mando no tiene un botón libre para la lámpara.",
+      "{A} para apuntar, {F} para disparar.",
+      "Botón Xbox, o Vista y Menú a la vez."}},
+    {"Adelante (joystick izquierdo)", "Atrás", "Izquierda", "Derecha", "Equis · saltar, trepar", "Círculo · cobertura, rodar",
+     "Cuadrado · cuerpo a cuerpo", "Triángulo · recoger, interactuar", "L · apuntar", "R · disparar", "Start · pausa", "Select",
+     "Cruceta arriba", "Cruceta abajo", "Cruceta izquierda", "Cruceta derecha"},
+    "Uncharted: Golden Abyss recompilado para PC. Necesitas tu propia copia del juego: no se distribuye nada del juego.",
+    "Versión", "Licencia", "GNU General Public License, versión 2 o posterior",
+    "Partidas guardadas", "Abrir la carpeta",
+    "Juego", "listo", "por preparar", "Mando", "conectado", "no conectado", "Versión",
+    "Mover", "Seleccionar", "Atrás", "Páginas", "Pestañas",
+    "Iniciando el juego...",
+    "Tu copia del juego", "La carpeta PCSA00029 copiada de la consola, con sce_sys/package/work.bin",
+    "El archivo del firmware", "PSVUPDAT.PUP, actualización 3.74 del sistema de PS Vita",
+    "Elegir", "PREPARAR", "Cancelar", "La preparación falló",
+    "Se necesitan al menos %d GB libres en %s",
+    "Solo una vez: unos 15 minutos. El juego se descifra, se recompila y se compila en este PC.",
+    "El juego está listo, pero debe compilarse para esta versión del port: unos 6 minutos.",
+    {"Descifrando el firmware", "Descifrando el juego", "Comprobando la versión 1.00", "Analizando el código",
+     "Código ARM a C", "Compilando", "Enlazando"},
+    "Intro",
+};
+
+// The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
+// ABYSS_LAUNCHER_LANGUAGE=en|it|pt|es overrides both, for test screenshots.
+const Texts& T() {
+    char forced[8] = {};
+    std::string language = GetEnvironmentVariableA("ABYSS_LAUNCHER_LANGUAGE", forced, sizeof(forced)) ? forced
+                                                                                                    : setting("launcher_language", "auto");
+    if (language == "auto") {
+        const WORD windows = PRIMARYLANGID(GetUserDefaultUILanguage());
+        language = windows == LANG_ITALIAN ? "it" : windows == LANG_PORTUGUESE ? "pt" : windows == LANG_SPANISH ? "es" : "en";
+    }
+    return language == "it" ? kItalian : language == "pt" ? kPortuguese : language == "es" ? kSpanish : kEnglish;
 }
-const Texts& T() { return italian() ? kItalian : kEnglish; }
 
 // --- colours and small helpers (mc3port's, the accent gold instead of red) ---
 
@@ -958,6 +1127,7 @@ void Launcher::start_game() {
     SetEnvironmentVariableA("RECOMP_GAME_NAME", "Uncharted: Golden Abyss");
     SetEnvironmentVariableA("RECOMP_FS", "fs");
     SetEnvironmentVariableA("RECOMP_LOG", "0");
+    SetEnvironmentVariableA("ABYSS_LAUNCHER", "1");  // the in-game menu's Quit reads "Back to the launcher" (overlay.cpp)
     std::error_code error;
     for (const fs::path& recipes : {exe_directory_ / "shaders.txt", exe_directory_ / ".." / ".." / "res" / "shaders.txt"}) {
         if (fs::exists(recipes, error)) {
@@ -1430,9 +1600,9 @@ void Launcher::page_settings() {
         number("fov", 1.0f, 0.8f, 1.5f, "%.2f");
         row(t.view_distance, t.view_distance_detail);
         number("view_distance", 1.0f, 1.0f, 3.0f, "%.2f");
-        const char* language_values[] = {"auto", "it", "en"};
-        row(t.language, nullptr, 330);
-        choice("launcher_language", "auto", language_values, t.language_names, 3, nullptr, 330);
+        const char* language_values[] = {"auto", "it", "en", "pt", "es"};
+        row(t.language, nullptr, 420);
+        choice("launcher_language", "auto", language_values, t.language_names, 5, nullptr, 420);
     } else {
         row(t.volume, nullptr);
         number("volume", 1.0f, 0, 1, "%.2f");
@@ -2294,7 +2464,7 @@ void Launcher::bottom_bar(float since) {
     };
     hint("Q E", kChrome, page_ == Page::kSettings || page_ == Page::kControls ? t.tabs_hint : t.pages_hint);
     hint("Esc", IM_COL32(255, 120, 100, 255), t.back);
-    hint(italian() ? "Invio" : "Enter", kGreen, t.select);
+    hint(t.enter, kGreen, t.select);
     hint("\xE2\x86\x91\xE2\x86\x93\xE2\x86\x90\xE2\x86\x92", kChrome, t.move_hint);
 }
 
