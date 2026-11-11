@@ -20,6 +20,8 @@ Controls: [docs/controls.md](docs/controls.md).
    downloaded.
 4. Press **Play**. In the game, F1 opens the menu with every setting and control.
 
+The release carries its own source code in `source/` (GPL), and the licences of what it ships in `licenses/`.
+
 What the game prints goes to `abyss.log` beside its files (`game\library\decrypted\PCSA00029\recomp`): attach it to a
 bug report.
 

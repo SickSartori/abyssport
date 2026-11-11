@@ -191,4 +191,7 @@ set_property(SOURCE src/core/settings.c src/platform/win32_compat.c src/platform
 target_link_libraries(abyssport PRIVATE imgui SDL3::SDL3-static pthread)
 # Barlow Semi Condensed (SIL Open Font License, third_party/fonts): the launcher's letters, beside the program.
 add_custom_command(TARGET abyssport POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/third_party/fonts" "$<TARGET_FILE_DIR:abyssport>/fonts")
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/third_party/fonts" "$<TARGET_FILE_DIR:abyssport>/fonts"
+    # abyssport's own artwork (tools/art/make_art.py): the backgrounds before there is a copy of the game, the emblem
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/res/launcher" "$<TARGET_FILE_DIR:abyssport>/art")
+set_property(SOURCE res/utf8.rc APPEND PROPERTY OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/utf8.manifest;${CMAKE_SOURCE_DIR}/res/abyssport.ico")

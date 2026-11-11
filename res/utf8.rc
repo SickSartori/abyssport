@@ -1,2 +1,4 @@
-// The manifest of abyss.exe and abyssport.exe (res/utf8.manifest): UTF-8 as their code page.
+// The resources of abyss.exe and abyssport.exe: the manifest (res/utf8.manifest: UTF-8 as their code page) and the
+// icon (res/abyssport.ico, drawn by tools/art/make_art.py).
 1 24 "utf8.manifest"
+1 ICON "abyssport.ico"

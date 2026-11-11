@@ -7,13 +7,14 @@ Needs a finished build (the launcher and the runtime library) and toolchain/llvm
 Downloads, pinned by version and SHA-256 and kept in dist/downloads: Python's embeddable distribution and the two
 packages tools/make_game.py needs. No game code or data goes in: the player's launcher makes those from their copy.
 
-  abyssport.exe, fonts/, shaders.txt     the launcher and what it reads
+  abyssport.exe, fonts/, art/, shaders.txt   the launcher and what it reads
   runtime/lib, runtime/include           the runtime compiled, and the two headers the game's code includes
   runtime/bin                            FFmpeg's DLLs, copied beside the abyss.exe the player's PC links
   tools/                                 make_game.py, build_game.py and what they run
   python/                                Python, embedded, with capstone and pycryptodome
   toolchain/llvm-mingw                   the compiler, its x86-64 part only
   licenses/, docs/                       the licences of what is shipped; the controls guide
+  source/                                abyssport's source at HEAD (git archive): the GPL's offer
 """
 import argparse
 import fnmatch
@@ -22,6 +23,7 @@ import hashlib
 import os
 import re
 import shutil
+import subprocess
 import sys
 import urllib.request
 import zipfile
@@ -87,6 +89,7 @@ def main():
     print("the launcher", flush=True)
     shutil.copyfile(os.path.join(build, "abyssport.exe"), os.path.join(out, "abyssport.exe"))
     copytree(os.path.join(ROOT, "third_party", "fonts"), os.path.join(out, "fonts"))
+    copytree(os.path.join(ROOT, "res", "launcher"), os.path.join(out, "art"))
     shutil.copyfile(os.path.join(ROOT, "res", "shaders.txt"), os.path.join(out, "shaders.txt"))
 
     print("the runtime", flush=True)
@@ -125,6 +128,14 @@ def main():
         for f in glob.glob(os.path.join(glob.escape(py), "Lib", "site-packages", whl + "-*.dist-info", "*LICEN*")): shutil.copyfile(f, os.path.join(lic, f"{whl}-{os.path.basename(f)}.txt"))
     for f in ("README.md", "THIRD_PARTY.md", "CHANGELOG.md"): shutil.copyfile(os.path.join(ROOT, f), os.path.join(out, f))
     copytree(os.path.join(ROOT, "docs"), os.path.join(out, "docs"))
+
+    # the GPL's source offer, kept simple: this version's source travels with its programs
+    print("the source", flush=True)
+    if subprocess.run(["git", "-C", ROOT, "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True).stdout.strip():
+        print("  warning: uncommitted changes: the source archive is HEAD's, not what was built")
+    os.makedirs(os.path.join(out, "source"))
+    if subprocess.run(["git", "-C", ROOT, "archive", "--format=zip", f"--prefix=abyssport-{version}/", "-o",
+                       os.path.join(out, "source", f"abyssport-{version}-source.zip"), "HEAD"]).returncode: die("git archive failed")
 
     print("zipping", flush=True)
     archive = shutil.make_archive(out, "zip", dist, os.path.basename(out))

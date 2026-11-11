@@ -8,7 +8,8 @@
 //
 // For scripts: ABYSS_LAUNCHER_SHOT=<file.png> saves the window's picture once the opening animation is over and
 // quits; ABYSS_LAUNCHER_PAGE=0..3 and ABYSS_LAUNCHER_TAB=n choose what it shows. ABYSS_LAUNCHER_AUTOPLAY=<seconds>
-// presses Play by itself and quits when the game ends.
+// presses Play by itself and quits when the game ends. ABYSS_LAUNCHER_PREPARE=<copy>|<PUP> (a release) chooses the
+// two, presses Prepare, and quits when it ends: exit code 0 when the game is then ready.
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -37,6 +38,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
+#define STBI_ONLY_JPEG
 #include "third_party/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "third_party/stb/stb_image_write.h"
@@ -378,7 +380,8 @@ private:
     SDL_Window* window_ = nullptr;
     SDL_GPUDevice* device_ = nullptr;
     SDL_GPUTextureFormat format_ = SDL_GPU_TEXTUREFORMAT_INVALID;
-    SDL_GPUTexture *background_ = nullptr, *logo_ = nullptr;
+    SDL_GPUTexture *background_ = nullptr, *logo_ = nullptr, *emblem_ = nullptr;
+    bool background_is_game_ = false;   // the game's own picture, not one of ours (art/bg_*.jpg)
     int background_width_ = 0, background_height_ = 0, logo_width_ = 0, logo_height_ = 0;
     int width_ = 0, height_ = 0;
     float scale_ = 1;
@@ -399,6 +402,7 @@ private:
     float setup_progress_ = 0;
     std::string setup_error_, setup_tail_;
     std::string chosen_copy_, chosen_pup_;   // UTF-8
+    bool prepare_auto_ = false;              // ABYSS_LAUNCHER_PREPARE: started by a script, which waits for the end
     std::string game_version_;
 
     bool menu_has_focus_ = true, focus_panel_ = false, left_pending_ = false;
@@ -476,6 +480,7 @@ bool Launcher::start() {
     info.ColorTargetFormat = format_;
     if (!ImGui_ImplSDLGPU3_Init(&info)) return false;
     load_fonts();
+    std::srand(static_cast<unsigned>(SDL_GetPerformanceCounter()));   // (which of our backgrounds, the dust and the trails)
     load_art();
     // The first time: Enhanced, as the other ports start (the game alone starts on its own defaults).
     if (!settings_has("launcher_style_custom")) apply_style(kStyleEnhanced);
@@ -493,6 +498,7 @@ void Launcher::stop() {
     if (device_) {
         if (background_) SDL_ReleaseGPUTexture(device_, background_);
         if (logo_) SDL_ReleaseGPUTexture(device_, logo_);
+        if (emblem_) SDL_ReleaseGPUTexture(device_, emblem_);
         if (window_) SDL_ReleaseWindowFromGPUDevice(device_, window_);
         SDL_DestroyGPUDevice(device_);
     }
@@ -555,12 +561,31 @@ SDL_GPUTexture* Launcher::make_texture(const unsigned char* rgba, int width, int
 }
 
 // The background and the logo, from the player's own copy: sce_sys/pic0.png (the game's picture, blurred here: made
-// small and averaged, the GPU's filter does the rest) and sce_sys/livearea/contents/startup.png (its logo).
+// small and averaged, the GPU's filter does the rest) and sce_sys/livearea/contents/startup.png (its logo). Until
+// there is a copy, one of abyssport's own pictures (art/bg_*.jpg, tools/art/make_art.py), chosen at random. The
+// emblem beside the port's name is always ours.
 void Launcher::load_art() {
-    if (!game_ready_) return;
-    const fs::path sys = game_directory_ / "fs" / "app0" / "sce_sys";
     int w = 0, h = 0, n = 0;
+    if (!emblem_) {
+        if (unsigned char* emblem = stbi_load((exe_directory_ / "art" / "emblem.png").string().c_str(), &w, &h, &n, 4)) {
+            emblem_ = make_texture(emblem, w, h);
+            stbi_image_free(emblem);
+        }
+    }
+    if (!game_ready_) {
+        static const char* const kOwn[] = {"bg_jungle.jpg", "bg_abyss.jpg", "bg_ruins.jpg"};
+        if (unsigned char* picture = stbi_load((exe_directory_ / "art" / kOwn[std::rand() % 3]).string().c_str(), &w, &h, &n, 4)) {
+            background_ = make_texture(picture, w, h);
+            background_width_ = w;
+            background_height_ = h;
+            stbi_image_free(picture);
+        }
+        return;
+    }
+    const fs::path sys = game_directory_ / "fs" / "app0" / "sce_sys";
     if (unsigned char* picture = stbi_load((sys / "pic0.png").string().c_str(), &w, &h, &n, 4)) {
+        if (background_) SDL_ReleaseGPUTexture(device_, background_);
+        background_is_game_ = true;
         const int sw = 96, sh = std::max(1, 96 * h / std::max(1, w));
         std::vector<float> small(static_cast<size_t>(sw * sh * 3), 0.0f), pass(small.size());
         for (int y = 0; y < sh; ++y) {
@@ -809,10 +834,9 @@ void Launcher::setup_rows() {
         if (setup_thread_.joinable()) setup_thread_.join();
         if (setup_job_) CloseHandle(setup_job_);
         setup_job_ = nullptr;
-        const bool had_art = background_ != nullptr;
         find_game();
         if (game_ready_) settings_load((game_directory_ / "settings.ini").string().c_str());
-        if (game_ready_ && !had_art) load_art();   // the game's own artwork, now that there is a copy of it
+        if (game_ready_ && !background_is_game_) load_art();   // the game's own artwork, now that there is a copy of it
         hold.lock();
     }
     const bool running = setup_running_;
@@ -1804,6 +1828,11 @@ void Launcher::header(float since) {
     }
     g_alpha = ease_out((since - 0.2f) / 0.8f);
     float tag_x = px(92);
+    if (emblem_) {   // abyssport's emblem before its name
+        const ImVec2 at(px(88), px(186));
+        list_->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(emblem_)), at, ImVec2(at.x + px(32), at.y + px(32)), ImVec2(0, 0), ImVec2(1, 1), fade(IM_COL32_WHITE));
+        tag_x += px(42);
+    }
     const std::string tag = "ABYSSPORT \xC2\xB7 PC";
     for (size_t i = 0; i < tag.size(); ++i) {  // letter-spaced
         const size_t length = (static_cast<unsigned char>(tag[i]) >= 0xC0) ? 2 : 1;
@@ -1857,6 +1886,7 @@ void Launcher::after_frame(float now) {
         play_ = ready;
         done_ = true;
     }
+    if (prepare_auto_ && !setup_thread_.joinable()) done_ = true;   // the script's Prepare has ended (setup_rows joined it)
     if (ready && rebinding_ < 0 && ImGui::IsKeyPressed(ImGuiKey_GamepadStart)) play_ = true;  // Start plays from any page
     if (rebinding_ < 0 && cancel_frame_ != ImGui::GetFrameCount() && (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight))) {
         if (!menu_has_focus_) {
@@ -2064,6 +2094,12 @@ int Launcher::run() {
     const char* shot = std::getenv("ABYSS_LAUNCHER_SHOT");
     if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 3));
     if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);
+    if (const char* prepare = std::getenv("ABYSS_LAUNCHER_PREPARE"); prepare && tools_ready_ && std::strchr(prepare, '|')) {
+        chosen_copy_.assign(prepare, std::strchr(prepare, '|'));
+        chosen_pup_ = std::strchr(prepare, '|') + 1;
+        start_setup();
+        prepare_auto_ = true;
+    }
     if (const char* item = std::getenv("ABYSS_LAUNCHER_HOW")) {  // a scene of "how to play", held, 1.6 s into its loop at the shot
         how_item_ = std::clamp(std::atoi(item), 0, 8);
         how_hold_until_ = 1e9f;
@@ -2157,7 +2193,7 @@ int Launcher::run() {
     }
     settings_save();
     stop();
-    return 0;
+    return prepare_auto_ && !(game_ready_ && program_ready_) ? 1 : 0;
 }
 
 }  // namespace
