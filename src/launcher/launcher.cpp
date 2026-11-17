@@ -1719,9 +1719,10 @@ void Launcher::how_page(float now) {
     cursor_ += measure(body_, px(17), t.how_lead, panel_width_).y + px(4);
 
     // What the tutorial is for: chosen here, first guessed from the controller connected (a PlayStation one: the
-    // DualSense's; any other: the Xbox's; none: keyboard and mouse).
+    // DualSense's; any other: the Xbox's; none: RecompLauncher's {pad} if it gave one, else keyboard and mouse).
     if (how_device_ < 0) {
-        how_device_ = 0;
+        const char* launcher_pad = std::getenv("RECOMPLAUNCHER_PAD");
+        how_device_ = !launcher_pad ? 0 : !std::strcmp(launcher_pad, "playstation") ? 1 : !std::strcmp(launcher_pad, "xbox") ? 2 : 0;
         int count = 0;
         if (SDL_JoystickID* pads = SDL_GetGamepads(&count)) {
             if (count > 0) {

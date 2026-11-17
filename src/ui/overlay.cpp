@@ -1171,8 +1171,9 @@ static void prompt(ImDrawList *dl, int k, ImVec2 c, float size, ImU32 col) {   /
 static void pad_names(const char **l, const char **r, const char **a, bool *touchpad, int *fam) {   /* the first pad's own button names and icons */
 	*l = "L1"; *r = "R1"; *a = "Cross"; *touchpad = true; *fam = FAM_PS;   /* (the Vita's own names, and a DualShock 4's or DualSense's: unless the pad says otherwise) */
 	int n = 0; SDL_JoystickID *ids = SDL_GetGamepads(&n);
-	if (ids && n > 0) {
-		const SDL_GamepadType t = SDL_GetGamepadTypeForID(ids[0]);
+	const char *launcher_pad = getenv("RECOMPLAUNCHER_PAD");   /* none connected: RecompLauncher's {pad}, if it gave one */
+	if ((ids && n > 0) || (launcher_pad && !strcmp(launcher_pad, "xbox"))) {
+		const SDL_GamepadType t = ids && n > 0 ? SDL_GetGamepadTypeForID(ids[0]) : SDL_GAMEPAD_TYPE_XBOXONE;
 		if (t == SDL_GAMEPAD_TYPE_XBOX360 || t == SDL_GAMEPAD_TYPE_XBOXONE) { *l = "LB"; *r = "RB"; *a = "A"; *touchpad = false; *fam = FAM_XBOX; }
 		else if (t == SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO || t == SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR) { *l = "L"; *r = "R"; *a = "B"; *touchpad = false; *fam = FAM_SWITCH; }
 		else if (t == SDL_GAMEPAD_TYPE_PS3) *touchpad = false;
