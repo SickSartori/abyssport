@@ -10,7 +10,7 @@
 // quits; ABYSS_LAUNCHER_PAGE=0..3 and ABYSS_LAUNCHER_TAB=n choose what it shows. ABYSS_LAUNCHER_AUTOPLAY=<seconds>
 // presses Play by itself and quits when the game ends. ABYSS_LAUNCHER_PREPARE=<copy>|<PUP> (a release) chooses the
 // two, presses Prepare, and quits when it ends: exit code 0 when the game is then ready. ABYSS_LAUNCHER_LANGUAGE=
-// en|it|pt|es speaks that language.
+// en|it|pt|es speaks that language. ABYSS_LAUNCHER_PLAY=1 (RecompLauncher) presses Play once the game is ready.
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -696,8 +696,10 @@ bool Launcher::start() {
     load_fonts();
     std::srand(static_cast<unsigned>(SDL_GetPerformanceCounter()));   // (which of our backgrounds, the dust and the trails)
     load_art();
-    // The first time: Enhanced, as the other ports start (the game alone starts on its own defaults).
-    if (!settings_has("launcher_style_custom")) apply_style(kStyleEnhanced);
+    // The first time: Enhanced, as the other ports start (the game alone starts on its own defaults), unless a style
+    // key was already set from outside (RecompLauncher's settings).
+    const bool style_key_set = std::any_of(std::begin(kStyleValues), std::end(kStyleValues), [](const StyleValue& v) { return settings_has(v.key); });
+    if (!settings_has("launcher_style_custom") && !style_key_set) apply_style(kStyleEnhanced);
     return true;
 }
 
@@ -2301,6 +2303,10 @@ void Launcher::after_frame(float now) {
         done_ = true;
     }
     if (prepare_auto_ && !setup_thread_.joinable()) done_ = true;   // the script's Prepare has ended (setup_rows joined it)
+    // ABYSS_LAUNCHER_PLAY (recomplauncher.json): Play as soon as the game is ready, and quit with it; until then (the
+    // first Prepare) the launcher as usual.
+    static const bool play_when_ready = std::getenv("ABYSS_LAUNCHER_PLAY") != nullptr;
+    if (play_when_ready && ready && !setup_thread_.joinable()) play_ = done_ = true;
     if (ready && rebinding_ < 0 && ImGui::IsKeyPressed(ImGuiKey_GamepadStart)) play_ = true;  // Start plays from any page
     if (rebinding_ < 0 && cancel_frame_ != ImGui::GetFrameCount() && (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight))) {
         if (!menu_has_focus_) {
