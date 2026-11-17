@@ -91,6 +91,7 @@ def main():
     copytree(os.path.join(ROOT, "third_party", "fonts"), os.path.join(out, "fonts"))
     copytree(os.path.join(ROOT, "res", "launcher"), os.path.join(out, "art"))
     shutil.copyfile(os.path.join(ROOT, "res", "shaders.txt"), os.path.join(out, "shaders.txt"))
+    shutil.copyfile(os.path.join(ROOT, "recomplauncher.json"), os.path.join(out, "recomplauncher.json"))   # RecompLauncher reads it beside the exe
 
     print("the runtime", flush=True)
     for d in ("lib", "include", "bin"): os.makedirs(os.path.join(out, "runtime", d))
@@ -147,7 +148,7 @@ def main():
                        os.path.join(out, "source", f"abyssport-{version}-source.zip"), "HEAD"]).returncode: die("git archive failed")
 
     print("zipping", flush=True)
-    archive = shutil.make_archive(out, "zip", dist, os.path.basename(out))
+    archive = shutil.make_archive(out + "-windows-x64", "zip", dist, os.path.basename(out))   # system and CPU in the name: launchers pick the file by them
     size = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(out) for f in fs)
     print(f"done: {out} ({size >> 20} MB), {archive} ({os.path.getsize(archive) >> 20} MB)")
 

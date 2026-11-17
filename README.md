@@ -6,6 +6,8 @@ Windows program, with a runtime that stands in for the Vita's system and hardwar
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub_Sponsors-support-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/SickSartori)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/sicksartori)
 
+<a href="https://recomplauncher.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
+
 Nothing of the game ships. You need your own copy of the game, US release PCSA00029 version 1.00, and the Vita
 firmware update file (PUP).
 

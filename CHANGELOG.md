@@ -4,6 +4,11 @@
 
 ### Added
 
+- RecompLauncher: `recomplauncher.json` in the release (Play starts the game once it is prepared; resolution, frame
+  rate, window, controls, mouse sensitivity and volume on the game's page), and the release zip is named
+  `abyssport-<version>-windows-x64.zip`. The launcher's first start keeps a resolution or frame rate set from outside
+  instead of applying the Enhanced style over it.
+
 - The game runs: its ARM code and Sony's libraries it loads (libc and FIOS from the game, the graphics library and
   its GPU services from the firmware update file) are recompiled to C from the player's own copy and built into the
   program. The intro film, the title, the menus, a new campaign and the prologue play, with sound; saved games are

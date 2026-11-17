@@ -1,0 +1,94 @@
+{
+  "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+  "format": 1,
+  "name": "abyssport",
+  "start": {
+    "program": ["abyssport.exe"],
+    "env": { "ABYSS_LAUNCHER_PLAY": "1" }
+  },
+  "saves": [
+    "{install}/game/library/decrypted/PCSA00029/recomp/fs/savedata0",
+    "{local}/abyssport/library/decrypted/PCSA00029/recomp/fs/savedata0"
+  ],
+  "config": [
+    {
+      "id": "main",
+      "format": "ini",
+      "file": [{ "path": "{config}/abyssport/settings.ini" }]
+    }
+  ],
+  "settings": [
+    {
+      "id": "resolution",
+      "label": "Resolution",
+      "help": "What the game draws at: 544p is the Vita's own. Higher is sharper and costs more.",
+      "choices": [
+        { "label": "544p (Vita)", "set": { "render_scale": "1" } },
+        { "label": "1088p", "set": { "render_scale": "2" } },
+        { "label": "1632p", "set": { "render_scale": "3" } },
+        { "label": "2176p (4K)", "set": { "render_scale": "4" } },
+        { "label": "2720p", "set": { "render_scale": "5" } },
+        { "label": "3264p", "set": { "render_scale": "6" } }
+      ],
+      "defaults": { "render_scale": "1" }
+    },
+    {
+      "id": "frame_rate",
+      "label": "Frame rate",
+      "help": "30 as on the Vita; 60 is experimental.",
+      "choices": [
+        { "label": "30 fps", "set": { "frame_rate": "30" } },
+        { "label": "60 fps", "set": { "frame_rate": "60" } }
+      ],
+      "defaults": { "frame_rate": "30" }
+    },
+    {
+      "id": "window",
+      "label": "Window",
+      "help": "Full screen or a window.",
+      "choices": [
+        { "label": "Windowed", "set": { "fullscreen": "0" } },
+        { "label": "Fullscreen", "set": { "fullscreen": "1" } }
+      ],
+      "defaults": { "fullscreen": "0" }
+    },
+    {
+      "id": "controls",
+      "label": "Controls",
+      "help": "Automatic switches to whatever you last touched: a controller, or the keyboard and mouse.",
+      "choices": [
+        { "label": "Automatic", "set": { "input_mode": "auto" } },
+        { "label": "Controller", "set": { "input_mode": "pad" } },
+        { "label": "Keyboard and mouse", "set": { "input_mode": "kbm" } }
+      ],
+      "defaults": { "input_mode": "auto" }
+    },
+    {
+      "id": "mouse_sens",
+      "label": "Mouse sensitivity",
+      "help": "How far the camera turns for a move of the mouse.",
+      "slider": { "key": "mouse_sens", "min": 0.1, "max": 5, "step": 0.1, "format": "%g" },
+      "defaults": { "mouse_sens": "1" }
+    },
+    {
+      "id": "volume",
+      "label": "Volume",
+      "help": "Overall volume; 1 is the loudest.",
+      "slider": { "key": "volume", "min": 0, "max": 1, "step": 0.05, "format": "%g" },
+      "defaults": { "volume": "1" }
+    }
+  ],
+  "folders": {
+    "saves": [
+      { "path": "{install}/game/library/decrypted/PCSA00029/recomp/fs/savedata0", "if": "{install}/game/library/decrypted/PCSA00029/recomp/game.img" },
+      { "path": "{local}/abyssport/library/decrypted/PCSA00029/recomp/fs/savedata0" }
+    ],
+    "logs": [
+      { "path": "{install}/game/library/decrypted/PCSA00029/recomp", "if": "{install}/game/library/decrypted/PCSA00029/recomp/game.img" },
+      { "path": "{local}/abyssport/library/decrypted/PCSA00029/recomp" }
+    ]
+  },
+  "actions": [
+    { "id": "saves", "label": "Saves", "help": "Your saved games.", "open": "saves" }
+  ]
+}
