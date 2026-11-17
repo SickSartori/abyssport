@@ -15,7 +15,7 @@ Status: early. The game starts, a new campaign begins and the prologue plays; no
 
 Controls: [docs/controls.md](docs/controls.md).
 
-## Playing
+## How to play
 
 1. Unzip the release anywhere with about 9 GB free (Windows 10 version 1903 or later, 64-bit).
 2. Open `abyssport.exe`. The first time it asks for your copy of the game (the `PCSA00029` folder copied off the
