@@ -412,13 +412,15 @@ static void h_trophy_create(Cpu *c) { if (A0) WR32(A0, 1); RET(0); }
  * when the queue is empty, which ends a game's drain loop */
 static void h_receive_system_event(Cpu *c) { RET(0x80802016u); }
 
-/* system settings (id, *value): 1 language (1 English US), 2 enter button (1 cross), 4 date format
+/* system settings (id, *value): 1 language (RECOMP_LANGUAGE, the console's code: 1 English US, 2 French,
+ * 4 German, 5 Italian, 6 Dutch, 18 English UK...; else 1), 2 enter button (1 cross), 4 date format
  * (0 YYYY/MM/DD), 5 time format (0 12-hour), 6 time zone (0 minutes: UTC, which is what the host's
  * RTC reports as local time too), 7 summer time (0 off); 3 is the user name, a string. Anything else
  * is SCE_APPUTIL_ERROR_PARAMETER, as on the console. */
 static void h_system_param_int(Cpu *c) {
 	if (A0 < 1 || A0 > 7 || A0 == 3 || !A1) { RET(0x80100600u); return; }
-	WR32(A1, A0 == 1 || A0 == 2 ? 1 : 0); RET(0);
+	const char *l = getenv("RECOMP_LANGUAGE");
+	WR32(A1, A0 == 1 ? (l && *l ? (uint32_t)atoi(l) : 1) : A0 == 2 ? 1 : 0); RET(0);
 }
 /* (id, buffer, size): only the user name (3) is a string -- "Player" (RECOMP_USERNAME overrides),
  * truncated to the buffer like strncpy plus a terminator; Killzone asks for it at boot (17 bytes:
