@@ -651,6 +651,9 @@ private:
     void enter_item();
     int item_count_ = 0;
     float item_shift_ = 0, page_alpha_ = 1;
+    // A torch's light over the background: it follows the mouse, and wanders by itself when the mouse rests.
+    ImVec2 torch_{-1, -1}, last_mouse_{-1, -1};
+    float mouse_moved_at_ = -100;
     std::unordered_map<ImGuiID, float> anims_;
     std::vector<Trail> trails_;
     std::vector<ImVec4> motes_;
@@ -2250,6 +2253,36 @@ void Launcher::frame(float now, float dt) {
     back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(8, 6, 4, 88));
     back->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(screen.x * 0.55f, screen.y), IM_COL32(0, 0, 0, 150), IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 150));
 
+    // A torch: its warm light follows the mouse, a little behind; while the mouse rests it wanders on its own.
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const bool mouse_valid = ImGui::IsMousePosValid();
+    if (mouse_valid && (mouse.x != last_mouse_.x || mouse.y != last_mouse_.y)) {
+        last_mouse_ = mouse;
+        mouse_moved_at_ = now;
+    }
+    const ImVec2 wander(screen.x * (0.38f + 0.2f * std::sin(now * 0.13f)), screen.y * (0.5f + 0.25f * std::sin(now * 0.21f + 1)));
+    const ImVec2 aim = mouse_valid && now - mouse_moved_at_ < 4 ? mouse : wander;
+    torch_ = torch_.x < 0 ? aim : ImLerp(torch_, aim, std::min(1.0f, dt * 3));
+    const float flicker = 1 + 0.04f * std::sin(now * 9.0f) + 0.03f * std::sin(now * 13.7f);
+    const auto glow = [&](float radius, int alpha) {  // a disc fading from its centre to its edge
+        constexpr int kSides = 48;
+        const ImVec2 uv = ImGui::GetDrawListSharedData()->TexUvWhitePixel;
+        const ImDrawIdx centre = static_cast<ImDrawIdx>(back->_VtxCurrentIdx);
+        back->PrimReserve(kSides * 3, kSides + 1);
+        back->PrimWriteVtx(torch_, uv, IM_COL32(255, 176, 70, alpha));
+        for (int i = 0; i < kSides; ++i) {
+            const float angle = 6.2831853f * static_cast<float>(i) / kSides;
+            back->PrimWriteVtx(ImVec2(torch_.x + std::cos(angle) * radius, torch_.y + std::sin(angle) * radius), uv, IM_COL32(255, 176, 70, 0));
+        }
+        for (int i = 0; i < kSides; ++i) {
+            back->PrimWriteIdx(centre);
+            back->PrimWriteIdx(static_cast<ImDrawIdx>(centre + 1 + i));
+            back->PrimWriteIdx(static_cast<ImDrawIdx>(centre + 1 + (i + 1) % kSides));
+        }
+    };
+    glow(px(340) * flicker, 54);
+    glow(px(120) * flicker, 40);
+
     // Light trails and dust in the air.
     if (random01() < dt * 3) {
         const float pick = random01();
@@ -2273,7 +2306,10 @@ void Launcher::frame(float now, float dt) {
             mote.y = screen.y + px(10);
             mote.x = screen.x * random01();
         }
-        back->AddCircleFilled(ImVec2(mote.x, mote.y), px(mote.z), IM_COL32(255, 214, 140, static_cast<int>(26 + 22 * mote.z)));
+        const float dx = mote.x - torch_.x, dy = mote.y - torch_.y;
+        const float lit = std::max(0.0f, 1 - std::sqrt(dx * dx + dy * dy) / px(320));  // the dust in the torch's light
+        back->AddCircleFilled(ImVec2(mote.x, mote.y), px(mote.z) * (1 + 0.6f * lit),
+                              IM_COL32(255, 214, 140, static_cast<int>(26 + 22 * mote.z + 150 * lit)));
     }
 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
