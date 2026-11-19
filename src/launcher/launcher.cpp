@@ -811,7 +811,7 @@ void Launcher::load_art() {
             stbi_image_free(art);
         }
     }
-    if (!game_ready_) {
+    const auto own_background = [&] {
         static const char* const kOwn[] = {"bg_temple.jpg", "bg_chasm.jpg", "bg_cave.jpg", "bg_ruins.jpg"};
         if (unsigned char* picture = stbi_load((exe_directory_ / "art" / kOwn[std::rand() % 4]).string().c_str(), &w, &h, &n, 4)) {
             background_ = make_texture(picture, w, h);
@@ -819,6 +819,9 @@ void Launcher::load_art() {
             background_height_ = h;
             stbi_image_free(picture);
         }
+    };
+    if (!game_ready_) {
+        own_background();
         return;
     }
     const fs::path sys = game_directory_ / "fs" / "app0" / "sce_sys";
@@ -872,6 +875,7 @@ void Launcher::load_art() {
         logo_height_ = h;
         stbi_image_free(logo);
     }
+    if (!background_) own_background();  // a copy without its picture: one of ours, as before there is a copy
 }
 
 // Where the game is: ABYSS_GAME_DIR, the build tree's game/library (the launcher runs from build/<preset>), or the
