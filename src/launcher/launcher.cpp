@@ -91,6 +91,7 @@ struct Texts {
     const char *copy, *copy_none, *pup, *pup_none, *choose, *prepare, *cancel, *failed, *space, *duration, *compile_only;
     const char *steps[7];
     const char *enter;  // the key's name in the hints
+    const char *support, *support_sub, *report;
 };
 
 const Texts kItalian = {
@@ -172,6 +173,7 @@ const Texts kItalian = {
     {"Decrittazione del firmware", "Decrittazione del gioco", "Controllo della versione 1.00", "Analisi del codice",
      "Codice ARM in C", "Compilazione", "Collegamento"},
     "Invio",
+    "Sostieni il progetto", "Gratis, e lo rester\xC3\xA0. Un grazie lo fa andare avanti.", "Segnala un problema",
 };
 
 const Texts kEnglish = {
@@ -253,6 +255,7 @@ const Texts kEnglish = {
     {"Decrypting the firmware", "Decrypting the game", "Checking version 1.00", "Analysing the code",
      "ARM code to C", "Compiling", "Linking"},
     "Enter",
+    "Support the project", "Free, and always will be. A thank-you keeps it going.", "Report a problem",
 };
 
 std::string setting(const char* key, const char* def) {
@@ -339,6 +342,7 @@ const Texts kPortuguese = {
     {"Descriptografando o firmware", "Descriptografando o jogo", "Verificando a versão 1.00", "Analisando o código",
      "Código ARM em C", "Compilando", "Vinculando"},
     "Enter",
+    "Apoie o projeto", "Gratuito, e sempre ser\xC3\xA1. Um obrigado o mant\xC3\xA9m vivo.", "Relatar um problema",
 };
 
 const Texts kSpanish = {
@@ -420,6 +424,7 @@ const Texts kSpanish = {
     {"Descifrando el firmware", "Descifrando el juego", "Comprobando la versión 1.00", "Analizando el código",
      "Código ARM a C", "Compilando", "Enlazando"},
     "Intro",
+    "Apoya el proyecto", "Gratis, y siempre lo ser\xC3\xA1. Un gracias lo mantiene vivo.", "Informar de un problema",
 };
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
@@ -2330,6 +2335,10 @@ void Launcher::page_about() {
         }
         cursor_ += px(48);
     }
+    // Never needed to play, and it buys nothing (README, "Supporting the project"): a row among the others, no reminders.
+    if (status(true, t.support, t.support_sub, "Ko-fi", "##kofi")) {
+        ShellExecuteA(nullptr, "open", "https://ko-fi.com/sicksartori", nullptr, nullptr, SW_SHOWNORMAL);
+    }
 }
 
 // --- the screen ---
@@ -2730,15 +2739,93 @@ void Launcher::bottom_bar(float since) {
     field(t.bar_game, game_ready_ ? t.bar_game_ok : t.bar_game_none);
     field(t.bar_pad, pad_connected_ ? t.bar_pad_on : t.bar_pad_off);
     field(t.bar_version, ABYSS_VERSION);
+    // Over the bar, bottom left, apart from its fields: rounded buttons to the report and the support.
+    struct BarButton {
+        ImVec2 at;
+        bool hover, clicked;
+    };
+    float button_x = px(86);
+    const float button_y = bar_y - px(52);
+    // Pills with a soft shadow that rise a little under the mouse: glass (`fill` 0) or solid in `fill`.
+    const auto button = [&](float width, ImU32 fill) {
+        BarButton b{ImVec2(button_x, button_y), false, false};
+        b.hover = ImGui::IsMouseHoveringRect(b.at, ImVec2(button_x + width, button_y + px(36)));
+        if (b.hover) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            b.at.y -= px(2);
+        }
+        const ImVec2 end(b.at.x + width, b.at.y + px(36));
+        list_->AddRectFilled(ImVec2(b.at.x, b.at.y + px(4)), ImVec2(end.x, end.y + px(4)), fade(IM_COL32(0, 0, 0, b.hover ? 120 : 80)), px(18));
+        if (fill) {
+            list_->AddRectFilled(b.at, end, fade(b.hover ? mix(fill, IM_COL32(255, 255, 255, 255), 0.15f) : fill), px(18));
+            list_->AddRectFilled(ImVec2(b.at.x + px(10), b.at.y + px(1)), ImVec2(end.x - px(10), b.at.y + px(2)), fade(IM_COL32(255, 255, 255, 70)));
+        } else {
+            list_->AddRectFilled(b.at, end, fade(IM_COL32(18, 18, 22, 190)), px(18));
+            list_->AddRectFilled(b.at, end, fade(IM_COL32(255, 255, 255, b.hover ? 40 : 20)), px(18));
+            list_->AddRect(b.at, end, fade(IM_COL32(255, 255, 255, b.hover ? 70 : 36)), px(18), 0, px(1));
+        }
+        b.clicked = b.hover && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        button_x = end.x + px(10);
+        return b;
+    };
+    enum { kFlag, kMug };
+    const auto link = [&](const char* label, ImU32 colour, int icon, ImU32 fill = 0) {
+        const ImVec2 size = measure(body_bold_, px(16), label);
+        const float icon_width = px(26);
+        const BarButton b = button(size.x + px(36) + icon_width, fill);
+        const ImU32 ink = fade(colour);
+        const float s = px(16), ix = b.at.x + px(16), cy = b.at.y + px(18);
+        if (icon == kFlag) {  // a flag on its pole
+            list_->AddLine(ImVec2(ix + s * 0.12f, cy - s * 0.55f), ImVec2(ix + s * 0.12f, cy + s * 0.55f), ink, px(1.8f));
+            const ImVec2 flag[] = {ImVec2(ix + s * 0.12f, cy - s * 0.55f), ImVec2(ix + s * 0.95f, cy - s * 0.45f),
+                                   ImVec2(ix + s * 0.95f, cy + s * 0.05f), ImVec2(ix + s * 0.12f, cy - s * 0.05f)};
+            list_->AddConvexPolyFilled(flag, 4, ink);
+        } else {  // Ko-fi's cup with its heart
+            list_->AddRect(ImVec2(ix, cy - s * 0.42f), ImVec2(ix + s * 0.78f, cy + s * 0.45f), ink, s * 0.14f, 0, px(1.7f));
+            list_->PathArcTo(ImVec2(ix + s * 0.8f, cy - s * 0.02f), s * 0.24f, -1.5708f, 1.5708f);
+            list_->PathStroke(ink, 0, px(1.7f));
+            const float hx = ix + s * 0.39f, hy = cy - s * 0.02f, r = s * 0.1f;
+            list_->AddCircleFilled(ImVec2(hx - r * 0.95f, hy - r * 0.35f), r, ink);
+            list_->AddCircleFilled(ImVec2(hx + r * 0.95f, hy - r * 0.35f), r, ink);
+            list_->AddTriangleFilled(ImVec2(hx - r * 1.9f, hy - r * 0.05f), ImVec2(hx + r * 1.9f, hy - r * 0.05f),
+                                     ImVec2(hx, hy + r * 1.9f), ink);
+        }
+        text(body_bold_, px(16), ImVec2(b.at.x + px(18) + icon_width, b.at.y + (px(36) - size.y) / 2), ink, label);
+        return b.clicked;
+    };
+    if (link(t.report, kInk, kFlag)) {
+        ShellExecuteA(nullptr, "open", "https://github.com/SickSartori/abyssport/issues/new", nullptr, nullptr, SW_SHOWNORMAL);
+    }
+    if (link(t.support, IM_COL32(255, 255, 255, 255), kMug, IM_COL32(255, 94, 91, 255))) {  // Ko-fi's colour
+        ShellExecuteA(nullptr, "open", "https://ko-fi.com/sicksartori", nullptr, nullptr, SW_SHOWNORMAL);
+    }
     float right = screen.x - px(86);
     const auto hint = [&](const char* key, ImU32 colour, const char* label) {
         right -= measure(body_, px(18), label).x;
         text(body_, px(18), ImVec2(right, text_y), kDim, label);
-        const float key_width = std::max(px(24), measure(body_bold_, px(15), key).x + px(12));
-        right -= key_width + px(8);
-        list_->AddRectFilled(ImVec2(right, text_y), ImVec2(right + key_width, text_y + px(22)), fade(colour), px(11));
-        const ImVec2 key_size = measure(body_bold_, px(15), key);
-        text(body_bold_, px(15), ImVec2(right + (key_width - key_size.x) / 2, text_y + (px(22) - key_size.y) / 2), IM_COL32(6, 6, 7, 255), key);
+        // keycaps, one per key: "Q E" is two, the four arrows four
+        const std::string keys = key;
+        const bool arrows = keys.rfind("\xE2\x86", 0) == 0;
+        std::vector<std::string> caps;
+        for (size_t i = 0; i < keys.size();) {
+            const size_t end = arrows ? i + 3 : std::min(keys.find(' ', i), keys.size());
+            caps.push_back(keys.substr(i, end - i));
+            i = arrows ? end : end + 1;
+        }
+        const float cap_h = px(24), gap = px(4), depth = px(3);
+        float total = -gap;
+        for (const std::string& cap : caps) total += std::max(cap_h, measure(body_bold_, px(14), cap.c_str()).x + px(12)) + gap;
+        right -= total + px(8);
+        float cap_x = right;
+        const float top = text_y - px(2);
+        for (const std::string& cap : caps) {
+            const float w = std::max(cap_h, measure(body_bold_, px(14), cap.c_str()).x + px(12));
+            list_->AddRectFilled(ImVec2(cap_x, top + depth), ImVec2(cap_x + w, top + cap_h), fade(mix(colour, IM_COL32(0, 0, 0, 255), 0.5f)), px(5));
+            list_->AddRectFilled(ImVec2(cap_x, top), ImVec2(cap_x + w, top + cap_h - depth), fade(colour), px(5));
+            const ImVec2 size = measure(body_bold_, px(14), cap.c_str());
+            text(body_bold_, px(14), ImVec2(cap_x + (w - size.x) / 2, top + (cap_h - depth - size.y) / 2), IM_COL32(6, 6, 7, 255), cap.c_str());
+            cap_x += w + gap;
+        }
         right -= px(24);
     };
     hint("Q E", kChrome, page_ == Page::kSettings || page_ == Page::kControls ? t.tabs_hint : t.pages_hint);

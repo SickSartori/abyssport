@@ -3,7 +3,6 @@
 A native PC port of Uncharted: Golden Abyss (PS Vita): the game's ARM code recompiled ahead of time into a
 Windows program, with a runtime that stands in for the Vita's system and hardware.
 
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub_Sponsors-support-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/SickSartori)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/sicksartori)
 
 <a href="https://recomplauncher.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
@@ -54,8 +53,7 @@ an embedded Python and the x86-64 part of llvm-mingw in `dist/abyssport-<version
 ## Supporting the project
 
 abyssport is free and always will be: no paid builds, no early access, no locked features. If you enjoy it and want
-to say thanks, you can support its author on [GitHub Sponsors](https://github.com/sponsors/SickSartori) or
-[Ko-fi](https://ko-fi.com/sicksartori). It is never needed to play, and it buys nothing: it gives more time for fixes,
+to say thanks, you can support its author on [Ko-fi](https://ko-fi.com/sicksartori). It is never needed to play, and it buys nothing: it gives more time for fixes,
 features and the next port.
 
 ## Licence

@@ -4,6 +4,8 @@
 
 ### Added
 
+- The launcher: Report a problem (a new issue on GitHub) and Support the project (Ko-fi) above its bottom bar, a
+  Support the project row in About, and the hints' keys drawn as keyboard keys.
 - The European copy of the game, PCSF00012 version 1.00, plays as the US one does (the same code; its
   `gamedata.bin` has other languages). The launcher's Settings, Game has the game's language, from the copy's own:
   English, French and Spanish in the US copy; English (UK), French, German, Italian and Dutch in the European one.
