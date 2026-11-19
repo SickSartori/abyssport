@@ -29,7 +29,8 @@
   Italian, English, Portuguese (Brazil) and Spanish, chosen from Windows' language.
   Play starts the game and the launcher comes back when it ends; the in-game menu's "Back to the launcher" does the
   same, for the settings that need a restart. Each page sits in a column from the top of the window to the bottom
-  bar, with Play at its foot, and scrolls when it is longer than the window; a slider's value sits beside its grab.
+  bar, with Play at its foot, and scrolls when it is longer than the window; a slider's value sits beside its grab,
+  and the internal resolution is a drop-down list.
   A torch's warm light follows the mouse over the background (and wanders by itself when the mouse rests), lighting
   the dust in the air.
 - `tools/make_game.py`: the game's code and data made from your own copy and Sony's firmware update file (3.74), in

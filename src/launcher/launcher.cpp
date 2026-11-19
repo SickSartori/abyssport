@@ -573,6 +573,8 @@ private:
     void row(const char* heading, const char* detail, float control = 270);
     bool segmented(const char* id, const char* const* labels, int count, int* current, const char* const* details = nullptr, float wide = 0);
     bool slider(const char* id, float* value, float minimum, float maximum, const char* format);
+    // A drop-down list on the row's right (270 px), after row().
+    bool combo(const char* id, const char* const* items, int count, int* current);
     // ImGui::SliderFloat with its text hidden and the value drawn beside the grab, on the side with more room, so the
     // grab never covers it.
     bool value_slider(const char* id, float* value, float minimum, float maximum, const char* format, float font_size);
@@ -702,6 +704,14 @@ bool Launcher::start() {
     style.Colors[ImGuiCol_FrameBgActive] = ImVec4(1, 1, 1, 0.16f);
     style.Colors[ImGuiCol_SliderGrab] = ImGui::ColorConvertU32ToFloat4(kGold);
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1, 0.82f, 0.4f, 1);
+    // The drop-down lists (the internal resolution), as mc3port's in red.
+    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.07f, 0.06f, 0.05f, 0.97f);
+    style.Colors[ImGuiCol_Header] = ImGui::ColorConvertU32ToFloat4(kGold);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.89f, 0.66f, 0.17f, 0.7f);
+    style.Colors[ImGuiCol_HeaderActive] = ImGui::ColorConvertU32ToFloat4(kGoldDark);
+    style.Colors[ImGuiCol_Button] = ImVec4(1, 1, 1, 0.07f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.89f, 0.66f, 0.17f, 0.6f);
+    style.Colors[ImGuiCol_Border] = ImVec4(1, 1, 1, 0.1f);
     style.Colors[ImGuiCol_NavCursor] = ImVec4(0, 0, 0, 0);  // the launcher draws its own selection
     ImGui_ImplSDL3_InitForSDLGPU(window_);
     ImGui_ImplSDL3_SetGamepadMode(ImGui_ImplSDL3_GamepadMode_AutoAll);  // every controller, not only the first
@@ -1472,6 +1482,24 @@ bool Launcher::value_slider(const char* id, float* value, float minimum, float m
     return changed;
 }
 
+bool Launcher::combo(const char* id, const char* const* items, int count, int* current) {
+    ImGui::SetCursorScreenPos(ImVec2(origin_.x + panel_width_ - px(270), origin_.y + cursor_ + px(8)));
+    ImGui::PushItemWidth(px(270));
+    ImGui::PushFont(body_bold_, px(18));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(px(8), px(5)));
+    claim_focus();
+    const bool changed = ImGui::Combo(id, current, items, count);
+    focus_ring();
+    focus_frame(ImVec2(origin_.x - px(24), origin_.y + cursor_), ImVec2(origin_.x + panel_width_ + px(14), origin_.y + cursor_ + px(52) + row_extra_));
+    ImGui::PopStyleVar();
+    ImGui::PopFont();
+    ImGui::PopItemWidth();
+    cursor_ += px(58) + row_extra_;
+    row_extra_ = 0;
+    list_->AddLine(ImVec2(origin_.x, origin_.y + cursor_ - px(6)), ImVec2(origin_.x + panel_width_, origin_.y + cursor_ - px(6)), fade(IM_COL32(255, 255, 255, 16)));
+    return changed;
+}
+
 bool Launcher::slider(const char* id, float* value, float minimum, float maximum, const char* format) {
     const float width = px(270);
     ImGui::SetCursorScreenPos(ImVec2(origin_.x + panel_width_ - width, origin_.y + cursor_ + px(8)));
@@ -1640,10 +1668,13 @@ void Launcher::page_settings() {
         row(t.window_mode, t.window_detail);
         choice("fullscreen", "0", off_on, t.window_names, 2);
         const char* scale_values[] = {"1", "2", "3", "4", "5", "6"};
-        const char* scale_labels[] = {"1x", "2x", "3x", "4x", "5x", "6x"};
-        const char* scale_details[] = {"544p", "1088p", "1632p", "2176p", "2720p", "3264p"};
-        row(t.resolution, t.resolution_detail, 400);
-        choice("render_scale", "1", scale_values, scale_labels, 6, scale_details, 400);
+        const char* scale_labels[] = {"1x \xC2\xB7 544p", "2x \xC2\xB7 1088p", "3x \xC2\xB7 1632p", "4x \xC2\xB7 2176p", "5x \xC2\xB7 2720p", "6x \xC2\xB7 3264p"};
+        row(t.resolution, t.resolution_detail);
+        int scale = std::clamp(std::atoi(setting("render_scale", "1").c_str()), 1, 6) - 1;
+        if (combo("##render_scale", scale_labels, 6, &scale)) {
+            settings_set_str("render_scale", scale_values[scale]);
+            settings_save();
+        }
         const char* rate_values[] = {"30", "60"};
         row(t.frame_rate, t.frame_rate_detail);
         choice("frame_rate", "30", rate_values, rate_values, 2);
