@@ -4,10 +4,11 @@
 # eboot.bin stub); the platform runs it directly as the main module (its export is named
 # eboot.data.json so the pipeline stages stay uniform).
 NAME = "Uncharted: Golden Abyss"
-# REGION: the release this pack plays (its content id: UP..., North America); another region's release is another build,
-# not played yet -- a search names it and says this release is the one Ativ plays
+# REGION: the release this pack was made from (its content id: UP..., North America). The European release, PCSF00012
+# (EP9000-PCSF00012), has the same 1.00 code byte for byte (uncharted.self, eboot.bin, sce_module): only its gamedata.bin
+# differs (its languages), so the same build plays it
 REGION = "US"
-OTHER_TITLES = "PCSF00001"   # other releases' title ids, known to be this game (PCSF00001: the EU release, EP9000-PCSF00012)
+OTHER_TITLES = "PCSF00001 PCSF00012"   # other releases' title ids, known to be this game
 SPLIT = 40                # ~3x Shovel Knight's code
 ELF = "uncharted.self.elf"   # the main module (the eboot is a launcher)
 FUNCTION_SEEDS = "0x8128ace2:thumb 0x8900264c:arm"   # functions the analysis misses, found on runs (a new copy needs them from its first build)

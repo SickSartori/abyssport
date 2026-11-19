@@ -71,7 +71,7 @@ struct Texts {
     const char *frame_rate, *frame_rate_detail;
     const char *anisotropy;
     const char *fsr, *fsr_detail, *post_aa, *post_aa_detail, *sharpen, *ssao, *ssao_detail, *shadows, *shadow_names[3];
-    const char *fov, *fov_detail, *view_distance, *view_distance_detail, *language, *language_names[5];
+    const char *fov, *fov_detail, *view_distance, *view_distance_detail, *language, *language_names[5], *game_language, *game_language_detail;
     const char *volume, *no, *yes;
     const char *controls_lead, *tab_keys, *tab_mouse, *tab_how;
     const char *press_key, *default_keys, *none;
@@ -113,6 +113,7 @@ const Texts kItalian = {
     "Occlusione ambientale", "Ombre morbide negli angoli e nei contatti", "Ombre", {"Originali", "Morbide", "Più morbide"},
     "Campo visivo", "1.00 è quello del gioco", "Distanza visiva", "Rocce e vegetazione spariscono più lontano",
     "Lingua del launcher", {"Automatica", "Italiano", "English", "Português", "Español"},
+    "Lingua del gioco", "Testi e voci: Automatica segue Windows",
     "Volume", "No", "Sì",
     "I controller funzionano così come sono. Qui scegli tasti e mouse, e vedi come si gioca senza touch.",
     "Tastiera", "Mouse e controller", "Come si gioca",
@@ -162,7 +163,7 @@ const Texts kItalian = {
     "Gioco", "pronto", "da preparare", "Controller", "collegato", "non collegato", "Versione",
     "Muovi", "Seleziona", "Indietro", "Pagine", "Schede",
     "Avvio del gioco...",
-    "La tua copia del gioco", "La cartella PCSA00029 copiata dalla console, con sce_sys/package/work.bin",
+    "La tua copia del gioco", "La cartella PCSA00029 (USA) o PCSF00012 (Europa) copiata dalla console, con sce_sys/package/work.bin",
     "Il file del firmware", "PSVUPDAT.PUP, aggiornamento 3.74 di PS Vita",
     "Scegli", "PREPARA", "Annulla", "Preparazione non riuscita",
     "Servono almeno %d GB liberi in %s",
@@ -193,6 +194,7 @@ const Texts kEnglish = {
     "Ambient occlusion", "Soft shadows in corners and contacts", "Shadows", {"Original", "Soft", "Softer"},
     "Field of view", "1.00 is the game's own", "View distance", "Rocks and foliage fade out further away",
     "Launcher language", {"Automatic", "Italiano", "English", "Português", "Español"},
+    "Game language", "Text and voices: Automatic follows Windows",
     "Volume", "No", "Yes",
     "Controllers work as they are. Here you choose keys and mouse, and see how to play without touch.",
     "Keyboard", "Mouse and controller", "How to play",
@@ -242,7 +244,7 @@ const Texts kEnglish = {
     "Game", "ready", "to be made", "Controller", "connected", "not connected", "Version",
     "Move", "Select", "Back", "Pages", "Tabs",
     "Starting the game...",
-    "Your copy of the game", "The PCSA00029 folder copied off the console, with sce_sys/package/work.bin",
+    "Your copy of the game", "The PCSA00029 (US) or PCSF00012 (Europe) folder copied off the console, with sce_sys/package/work.bin",
     "The firmware file", "PSVUPDAT.PUP, PS Vita system update 3.74",
     "Choose", "PREPARE", "Cancel", "Preparing failed",
     "At least %d GB must be free in %s",
@@ -278,6 +280,7 @@ const Texts kPortuguese = {
     "Oclusão de ambiente", "Sombras suaves em cantos e contatos", "Sombras", {"Originais", "Suaves", "Mais suaves"},
     "Campo de visão", "1.00 é o do jogo", "Distância de visão", "Rochas e vegetação somem mais longe",
     "Idioma do launcher", {"Automático", "Italiano", "English", "Português", "Español"},
+    "Idioma do jogo", "Textos e vozes: Automático segue o Windows",
     "Volume", "Não", "Sim",
     "Os controles funcionam como estão. Aqui você escolhe teclas e mouse, e vê como jogar sem toque.",
     "Teclado", "Mouse e controle", "Como jogar",
@@ -327,7 +330,7 @@ const Texts kPortuguese = {
     "Jogo", "pronto", "a preparar", "Controle", "conectado", "não conectado", "Versão",
     "Mover", "Selecionar", "Voltar", "Páginas", "Abas",
     "Iniciando o jogo...",
-    "Sua cópia do jogo", "A pasta PCSA00029 copiada do console, com sce_sys/package/work.bin",
+    "Sua cópia do jogo", "A pasta PCSA00029 (EUA) ou PCSF00012 (Europa) copiada do console, com sce_sys/package/work.bin",
     "O arquivo do firmware", "PSVUPDAT.PUP, atualização 3.74 do sistema do PS Vita",
     "Escolher", "PREPARAR", "Cancelar", "A preparação falhou",
     "São necessários pelo menos %d GB livres em %s",
@@ -358,6 +361,7 @@ const Texts kSpanish = {
     "Oclusión ambiental", "Sombras suaves en esquinas y contactos", "Sombras", {"Originales", "Suaves", "Más suaves"},
     "Campo de visión", "1.00 es el del juego", "Distancia de visión", "Rocas y vegetación desaparecen más lejos",
     "Idioma del launcher", {"Automático", "Italiano", "English", "Português", "Español"},
+    "Idioma del juego", "Textos y voces: Automático sigue a Windows",
     "Volumen", "No", "Sí",
     "Los mandos funcionan tal cual. Aquí eliges teclas y ratón, y ves cómo se juega sin pantalla táctil.",
     "Teclado", "Ratón y mando", "Cómo se juega",
@@ -407,7 +411,7 @@ const Texts kSpanish = {
     "Juego", "listo", "por preparar", "Mando", "conectado", "no conectado", "Versión",
     "Mover", "Seleccionar", "Atrás", "Páginas", "Pestañas",
     "Iniciando el juego...",
-    "Tu copia del juego", "La carpeta PCSA00029 copiada de la consola, con sce_sys/package/work.bin",
+    "Tu copia del juego", "La carpeta PCSA00029 (EE. UU.) o PCSF00012 (Europa) copiada de la consola, con sce_sys/package/work.bin",
     "El archivo del firmware", "PSVUPDAT.PUP, actualización 3.74 del sistema de PS Vita",
     "Elegir", "PREPARAR", "Cancelar", "La preparación falló",
     "Se necesitan al menos %d GB libres en %s",
@@ -429,6 +433,35 @@ const Texts& T() {
         language = windows == LANG_ITALIAN ? "it" : windows == LANG_PORTUGUESE ? "pt" : windows == LANG_SPANISH ? "es" : "en";
     }
     return language == "it" ? kItalian : language == "pt" ? kPortuguese : language == "es" ? kSpanish : kEnglish;
+}
+
+// The game's languages: the names its text files have (find_game reads a copy's), what each is called, and the console's code for it that the game is told (RECOMP_LANGUAGE, apputil.c).
+struct GameLanguage { const char *code, *name, *console; };
+const GameLanguage kGameLanguages[] = {
+    {"en", "English (US)", "1"}, {"en-gb", "English (UK)", "18"}, {"fr", "FranÃ§" "ais", "2"}, {"de", "Deutsch", "4"},
+    {"it", "Italiano", "5"}, {"nl", "Nederlands", "6"}, {"es", "EspaÃ±ol", "3"},
+};
+
+// The one played from a copy's (codes): the setting when the copy has it, else Windows' language when it has that,
+// else its English.
+const GameLanguage& game_language(const std::vector<std::string>& codes) {
+    auto has = [&](const std::string& code) { return std::find(codes.begin(), codes.end(), code) != codes.end(); };
+    std::string wanted = setting("game_language", "auto");
+    if (!has(wanted)) {
+        const LANGID windows = GetUserDefaultUILanguage();
+        switch (PRIMARYLANGID(windows)) {
+        case LANG_ITALIAN: wanted = "it"; break;
+        case LANG_FRENCH: wanted = "fr"; break;
+        case LANG_GERMAN: wanted = "de"; break;
+        case LANG_DUTCH: wanted = "nl"; break;
+        case LANG_SPANISH: wanted = "es"; break;
+        default: wanted = SUBLANGID(windows) == SUBLANG_ENGLISH_US ? "en" : "en-gb";
+        }
+        if (!has(wanted)) wanted = has("en") ? "en" : "en-gb";
+    }
+    for (const GameLanguage& language : kGameLanguages)
+        if (wanted == language.code) return language;
+    return kGameLanguages[0];
 }
 
 // --- colours and small helpers (mc3port's, the accent gold instead of red) ---
@@ -622,6 +655,7 @@ private:
     std::string chosen_copy_, chosen_pup_;   // UTF-8
     bool prepare_auto_ = false;              // ABYSS_LAUNCHER_PREPARE: started by a script, which waits for the end
     std::string game_version_;
+    std::vector<std::string> game_languages_;   // the copy's (game_language)
 
     bool menu_has_focus_ = true, focus_panel_ = false, left_pending_ = false;
     int menu_cursor_ = 0;
@@ -915,6 +949,22 @@ void Launcher::find_game() {
             while (!game_version_.empty() && std::isspace(static_cast<unsigned char>(game_version_.back()))) game_version_.pop_back();
             std::fclose(file);
         }
+        // the languages of the copy's text: the names in its gamedata.bin's index (an HG2 archive, the index's size
+        // at +12), game/strings/onscreen.<language>.strings.bsp -- the US copy: en fr es; the European one: en-gb fr de it nl
+        game_languages_.clear();
+        if (FILE* file = _wfopen((game_directory_ / "fs" / "app0" / "gamedata.bin").c_str(), L"rb")) {
+            unsigned char head[16] = {};
+            if (std::fread(head, 1, 16, file) == 16 && !std::memcmp(head, "HG2", 4)) {
+                std::string index(head[12] | head[13] << 8 | head[14] << 16 | static_cast<size_t>(head[15]) << 24, char());
+                index.resize(std::fread(index.data(), 1, std::min<size_t>(index.size(), 64u << 20), file));
+                const std::string prefix = "game/strings/onscreen.", suffix = ".strings.bsp";
+                for (size_t at = index.find(prefix); at != std::string::npos; at = index.find(prefix, at + 1)) {
+                    const size_t start = at + prefix.size(), end = index.find(suffix, start);
+                    if (end != std::string::npos && end - start < 8) game_languages_.push_back(index.substr(start, end - start));
+                }
+            }
+            std::fclose(file);
+        }
     }
     // The program: beside the launcher in the build tree; in a release, beside the player's library, where the first
     // run links it (<base>/library/decrypted/PCSA00029/recomp -> <base>/abyss.exe).
@@ -1158,6 +1208,9 @@ void Launcher::start_game() {
     SetEnvironmentVariableA("RECOMP_TITLE", "PCSA00029");
     SetEnvironmentVariableA("RECOMP_GAME_NAME", "Uncharted: Golden Abyss");
     SetEnvironmentVariableA("RECOMP_FS", "fs");
+    // the console's language setting (apputil.c); none found in the copy: the game's own default, English (US), which
+    // the European copy plays as its English (UK)
+    SetEnvironmentVariableA("RECOMP_LANGUAGE", game_languages_.empty() ? nullptr : game_language(game_languages_).console);
     SetEnvironmentVariableA("RECOMP_LOG", "0");
     SetEnvironmentVariableA("ABYSS_LAUNCHER", "1");  // the in-game menu's Quit reads "Back to the launcher" (overlay.cpp)
     std::error_code error;
@@ -1702,6 +1755,24 @@ void Launcher::page_settings() {
         const char* language_values[] = {"auto", "it", "en", "pt", "es"};
         row(t.language, nullptr, 420);
         choice("launcher_language", "auto", language_values, t.language_names, 5, nullptr, 420);
+        if (!game_languages_.empty()) {
+            // Automatic, then the copy's languages (the US copy: English, French, Spanish; the European one: English,
+            // French, German, Italian, Dutch)
+            std::vector<const char*> values = {"auto"}, labels = {t.language_names[0]};
+            for (const GameLanguage& language : kGameLanguages) {
+                if (std::find(game_languages_.begin(), game_languages_.end(), language.code) == game_languages_.end()) continue;
+                values.push_back(language.code);
+                labels.push_back(language.name);
+            }
+            const std::string now = setting("game_language", "auto");
+            int current = 0;
+            for (size_t i = 0; i < values.size(); ++i) if (now == values[i]) current = static_cast<int>(i);
+            row(t.game_language, t.game_language_detail);
+            if (combo("##game_language", labels.data(), static_cast<int>(labels.size()), &current)) {
+                settings_set_str("game_language", values[current]);
+                settings_save();
+            }
+        }
     } else {
         row(t.volume, nullptr);
         number("volume", 1.0f, 0, 1, "%.2f");

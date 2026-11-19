@@ -8,8 +8,8 @@ Windows program, with a runtime that stands in for the Vita's system and hardwar
 
 <a href="https://recomplauncher.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
 
-Nothing of the game ships. You need your own copy of the game, US release PCSA00029 version 1.00, and the Vita
-firmware update file (PUP).
+Nothing of the game ships. You need your own copy of the game version 1.00, the US release PCSA00029 or the
+European one PCSF00012, and the Vita firmware update file (PUP).
 
 Status: early. The game starts, a new campaign begins and the prologue plays; nothing has been played through yet.
 
@@ -18,12 +18,16 @@ Controls: [docs/controls.md](docs/controls.md).
 ## How to play
 
 1. Unzip the release anywhere with about 9 GB free (Windows 10 version 1903 or later, 64-bit).
-2. Open `abyssport.exe`. The first time it asks for your copy of the game (the `PCSA00029` folder copied off the
-   console, with its licence `sce_sys/package/work.bin`) and the firmware file `PSVUPDAT.PUP` (system update 3.74).
+2. Open `abyssport.exe`. The first time it asks for your copy of the game (the `PCSA00029` or `PCSF00012` folder
+   copied off the console, with its licence `sce_sys/package/work.bin`) and the firmware file `PSVUPDAT.PUP`
+   (system update 3.74).
 3. Press **Prepare**. Once only, about 15 minutes: the game is decrypted, its code recompiled to C and compiled on
    your PC with the compiler that comes with the release. Nothing is installed in the system and nothing is
    downloaded.
 4. Press **Play**. In the game, F1 opens the menu with every setting and control.
+
+The game's language, text and voices, is in the launcher's Settings, Game: the US copy has English, French and
+Spanish; the European one English (UK), French, German, Italian and Dutch. Automatic follows Windows' language.
 
 The release carries its own source code in `source/` (GPL), and the licences of what it ships in `licenses/`.
 

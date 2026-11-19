@@ -4,6 +4,10 @@
 
 ### Added
 
+- The European copy of the game, PCSF00012 version 1.00, plays as the US one does (the same code; its
+  `gamedata.bin` has other languages). The launcher's Settings, Game has the game's language, from the copy's own:
+  English, French and Spanish in the US copy; English (UK), French, German, Italian and Dutch in the European one.
+  Automatic follows Windows' language, else the copy's English.
 - RecompLauncher: `recomplauncher.json` in the release (Play starts the game once it is prepared; resolution, frame
   rate, window, controls, mouse sensitivity and volume on the game's page), and the release zip is named
   `abyssport-<version>-windows-x64.zip`. The launcher's first start keeps a resolution or frame rate set from outside
