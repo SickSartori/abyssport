@@ -4952,9 +4952,13 @@ static void recipes_load(void) {   /* once, on the render thread: the shipped re
 	const char *paths[2] = { shipped && *shipped ? shipped : 0, local };
 	char *buf[2] = { 0, 0 }; size_t len[2] = { 0, 0 }; int local_ok = 0, nship = 0;
 	const size_t hl = strlen(RECIPES_HEADER);
+	size_t body[2] = { 0, 0 };   /* where each file's lines start: past the header's line end */
 	for (int f = 0; f < 2; f++) {
 		if (!paths[f] || !(buf[f] = rc_read(paths[f], &len[f]))) continue;
-		if (len[f] > hl && !strncmp(buf[f], RECIPES_HEADER, hl) && buf[f][hl] == '\n') { if (f) local_ok = 1; continue; }
+		/* (Windows line ends too: git's autocrlf checks the shipped file out with them, and the 0.1.0 package carried it
+		 * so -- every shipped recipe refused, their shaders built at first use instead of at start; found 2026-11-21) */
+		const size_t eol = len[f] > hl + 1 && buf[f][hl] == '\r' && buf[f][hl + 1] == '\n' ? 2 : len[f] > hl && buf[f][hl] == '\n' ? 1 : 0;
+		if (eol && !strncmp(buf[f], RECIPES_HEADER, hl)) { body[f] = hl + eol; if (f) local_ok = 1; continue; }
 		if (f && len[f]) { char old[1200]; snprintf(old, sizeof old, "%s.old", local); rename(local, old); fprintf(stderr, "    gpu: shader recipes: %s is another version's (moved to %s): starting a new one\n", local, old); }
 		else if (!f) fprintf(stderr, "    gpu: shader recipes: %s isn't this version's recipes: not used\n", paths[f]);
 		free(buf[f]); buf[f] = 0; len[f] = 0;
@@ -4962,9 +4966,9 @@ static void recipes_load(void) {   /* once, on the render thread: the shipped re
 	char **lines = 0; int nl = 0, ns = 0, cap = 0, nship_lines = 0;   /* every line, NUL-terminated in place */
 	for (int f = 0; f < 2; f++) {
 		if (!buf[f]) continue;
-		for (char *p = buf[f] + hl + 1, *end = buf[f] + len[f]; p < end; ) {
+		for (char *p = buf[f] + body[f], *end = buf[f] + len[f]; p < end; ) {
 			char *nlp = memchr(p, '\n', (size_t)(end - p)); if (!nlp) break;   /* (a last line cut short: a session that ended mid-write) */
-			*nlp = 0;
+			*nlp = 0; if (nlp > p && nlp[-1] == '\r') nlp[-1] = 0;
 			if (nl == cap) { cap = cap ? 2 * cap : 4096; char **n2 = realloc(lines, cap * sizeof *n2); if (!n2) break; lines = n2; }
 			lines[nl++] = p; ns += p[0] == 'S'; p = nlp + 1;
 		}

@@ -38,7 +38,8 @@
 - The build: llvm-mingw and Ninja, fetched by `tools/get_toolchain.py` (nothing is installed), with the `pc-x64`
   preset. SDL3, zlib and FFmpeg are downloaded at configure time, pinned by version and hash.
 - The shader recipes for the game (`res/shaders.txt`), so its shaders are built as it starts and not at their
-  first use.
+  first use. The file keeps LF line ends (`.gitattributes`), and the runtime reads it with Windows line ends too:
+  checked out with them, every recipe had been refused.
 - The release (`tools/make_package.py`): the launcher, the runtime compiled, the tools, an embedded Python and the
   compiler, in one zip. The first time, the launcher asks for your copy of the game and the firmware file and
   makes the game on your PC (Prepare: decrypted, recompiled, compiled by `tools/build_game.py`), with its progress
