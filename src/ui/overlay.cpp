@@ -48,6 +48,7 @@
 #define STBI_NO_STDIO
 #include "third_party/stb/stb_image.h"   /* (its implementation: runtime/media/jpeg.c) */
 #include "prompts_png.h"                 /* third_party/kenney-prompts/prompts.png as bytes (runtime/build.py writes it) */
+#include "game_texts.h"                  /* the cards' words, in the launcher's language */
 #include "launcher_game.h"               /* the menu: abyssport's launcher (src/launcher/launcher.cpp) */
 #include <atomic>
 #include <cfloat>
@@ -78,7 +79,8 @@ static bool g_has_window;      /* overlay_init was given a real SDL_Window: the 
 /* written by the window thread, read by the game thread (display.c's pause, window.c's audio): atomic,
  * like every other flag that crosses those threads (rscale_req, osd_level_v). g_paused: the touch card
  * holds the game (display.c, as for the menu) */
-static std::atomic<bool> g_open, g_want_quit, g_want_capture, g_paused;
+static std::atomic<bool> g_open, g_want_capture, g_paused;
+static std::atomic<int> g_want_quit;   /* 1 quit (back to the launcher that started the game), 2 quit the launcher too */
 static std::atomic<bool> g_intro;                 /* the touch card is up (the game paused under it) */
 static void intro_end(void); static void build_intro(void);
 static std::atomic<bool> g_prep_card;             /* the shader prep card is up (in the menu's open state: the game paused, input to the card) */
@@ -119,7 +121,7 @@ void overlay_shutdown(void) {
 	ImGui_ImplSDLGPU3_Shutdown();
 	if (g_has_window) ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext(g_ctx);
-	g_ctx = nullptr; g_has_window = false; g_open = false; g_want_quit = false; g_want_capture = false; g_paused = false;
+	g_ctx = nullptr; g_has_window = false; g_open = false; g_want_quit = 0; g_want_capture = false; g_paused = false;
 }
 
 int overlay_is_open(void) { return g_ctx && g_open; }
@@ -143,14 +145,14 @@ void overlay_close(void) {   /* closing the menu resumes */
 void overlay_toggle(void) { if (g_open) overlay_close(); else overlay_open(); }
 void overlay_escape(void) { if (g_quit_card || g_layout_card || g_prep_card) overlay_close(); }
 int overlay_game_paused(void) { return g_ctx && (g_open || g_paused); }
-int overlay_wants_quit(void) { return g_want_quit.exchange(false); }
+int overlay_wants_quit(void) { return g_want_quit.exchange(0); }
 int overlay_quit_confirm(void) {   /* (window.c, on a request to close the window) 1: the card is up now; 0: it already was, or can't be: quit */
 	if (!g_ctx || !g_has_window || g_quit_card) return 0;
 	g_quit_card = true; overlay_open(); return 1;
 }
-/* quitting a game the launcher started (ABYSS_LAUNCHER, launcher.cpp's start_game) brings the launcher back, where the
- * settings that need a restart change: the button says so */
-static const char *quit_label(void) { return std::getenv("ABYSS_LAUNCHER") ? "Back to the launcher" : "Quit game"; }
+/* the cards drawn here over the game (the save-data dialog, the quit card): the text a whole multiple of its size for
+ * every 540 lines of the window (the Vita's own height, 544) -- the base size alone was a speck on a large screen */
+static float card_scale(float height) { return fmaxf(1.0f, floorf(height / 540.0f)); }
 int overlay_wants_capture(void) { return g_want_capture.exchange(false); }
 
 extern "C" int window_kbm_active(void);   /* window.c: keyboard and mouse were used last */
@@ -172,8 +174,9 @@ static void apply_setting(const char *key) {
 static void build_ui(void) {
 	const ImGuiIO &io = ImGui::GetIO();
 	const int r = launcher_game_frame((int)io.DisplaySize.x, (int)io.DisplaySize.y);
-	if (r == 1) overlay_close();
-	else if (r == 2) g_want_quit = true;
+	if (r == 1) { std::fprintf(stderr, "    menu: closed (Resume)\n"); overlay_close(); }
+	else if (r == 2) g_want_quit = 1;
+	else if (r == 3) g_want_quit = 2;
 }
 
 /* ---- everything the closed state shows (build_closed). All of it runs on the window thread (window.c's present
@@ -330,22 +333,22 @@ static void build_save_dialog(float w, float hgt) {
 	if (!g_sd_armed && !keys_down(K_OK) && !keys_down(K_BACK)) g_sd_armed = true;
 	const bool ok = g_sd_armed && keys_pressed(K_OK), back = g_sd_armed && keys_pressed(K_BACK);
 	int answer = 0; bool answered = false, moved = false;
-	const float s = w >= 1400 ? 2.0f : 1.0f;   /* (the bitmap font: integer multiples stay crisp) */
+	const float s = card_scale(hgt);
 	ImGui::SetNextWindowPos(ImVec2(w * 0.5f, hgt * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowSize(ImVec2(fminf(w - 32, 520 * s), 0), ImGuiCond_Always);   /* (height 0: fitted every frame) */
 	ImGui::SetNextWindowBgAlpha(0.95f);
 	ImGui::Begin("##savedlg", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
-	ImGui::SetWindowFontScale(s);
+	ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * s);
 	const ImU32 dim = ImGui::GetColorU32(ImGuiCol_TextDisabled), txt = ImGui::GetColorU32(ImGuiCol_Text);
 	if (kind == SAVEDLG_LIST) {
-		ImGui::TextUnformatted(v.title[0] ? v.title : "Saved data");
+		ImGui::TextUnformatted(v.title[0] ? v.title : game_text(GT_SAVED_DATA));
 		ImGui::Separator();
 		if (g_sd_armed && v.nrows) {
 			if (keys_pressed(K_UP) && g_sd_sel > 0) { g_sd_sel--; moved = true; }
 			if (keys_pressed(K_DOWN) && g_sd_sel < v.nrows - 1) { g_sd_sel++; moved = true; }
 		}
 		if (g_sd_sel >= v.nrows) g_sd_sel = v.nrows ? v.nrows - 1 : 0;
-		if (!v.nrows) ImGui::TextDisabled("There is no saved data.");
+		if (!v.nrows) ImGui::TextDisabled("%s", game_text(GT_NO_DATA));
 		else {
 			const float lh = ImGui::GetTextLineHeight(), rowh = 3 * lh + 12 * s;
 			ImGui::BeginChild("rows", ImVec2(0, (rowh + ImGui::GetStyle().ItemSpacing.y) * (float)(v.nrows < 5 ? v.nrows : 5)));
@@ -358,26 +361,26 @@ static void build_save_dialog(float w, float hgt) {
 				if (ImGui::IsItemHovered() && (ImGui::GetIO().MouseDelta.x || ImGui::GetIO().MouseDelta.y)) g_sd_sel = i;
 				if (moved && i == g_sd_sel) ImGui::SetScrollHereY(0.5f);
 				ImDrawList *dl = ImGui::GetWindowDrawList();
-				dl->AddText(font, fs, ImVec2(p.x + 6 * s, p.y + 4 * s), txt, r.title);
+				dl->AddText(ImVec2(p.x + 6 * s, p.y + 4 * s), txt, r.title);
 				if (r.exists) {
-					const float dw = font->CalcTextSizeA(fs, FLT_MAX, 0, r.date).x;
-					dl->AddText(font, fs, ImVec2(p.x + rw - dw - 6 * s, p.y + 4 * s), dim, r.date);
-					if (r.sub[0]) dl->AddText(font, fs, ImVec2(p.x + 6 * s, p.y + 6 * s + lh), txt, r.sub);
-					if (r.detail[0]) dl->AddText(font, fs, ImVec2(p.x + 6 * s, p.y + 8 * s + 2 * lh), dim, r.detail);
-				} else dl->AddText(font, fs, ImVec2(p.x + 6 * s, p.y + 6 * s + lh), dim, "(empty)");
+					const float dw = ImGui::CalcTextSize(r.date).x;
+					dl->AddText(ImVec2(p.x + rw - dw - 6 * s, p.y + 4 * s), dim, r.date);
+					if (r.sub[0]) dl->AddText(ImVec2(p.x + 6 * s, p.y + 6 * s + lh), txt, r.sub);
+					if (r.detail[0]) dl->AddText(ImVec2(p.x + 6 * s, p.y + 8 * s + 2 * lh), dim, r.detail);
+				} else dl->AddText(ImVec2(p.x + 6 * s, p.y + 6 * s + lh), dim, game_text(GT_EMPTY));
 				ImGui::PopID();
 			}
 			ImGui::EndChild();
 		}
 		if (ok && v.nrows) { answer = g_sd_sel; answered = true; }
 		ImGui::Separator();
-		if (ImGui::Button("Back") || back) { answer = SAVEDLG_CANCEL; answered = true; }
-		ImGui::SameLine(); ImGui::TextDisabled("  Cross / Enter: choose    Circle / Esc: back");
+		if (ImGui::Button(game_text(GT_BACK)) || back) { answer = SAVEDLG_CANCEL; answered = true; }
+		ImGui::SameLine(); ImGui::TextDisabled("  %s", game_text(GT_LIST_HINT));
 	} else if (kind == SAVEDLG_YESNO) {
-		ImGui::PushTextWrapPos(0); ImGui::TextUnformatted(v.msg[0] ? v.msg : "Continue?"); ImGui::PopTextWrapPos();
+		ImGui::PushTextWrapPos(0); ImGui::TextUnformatted(v.msg[0] ? v.msg : game_text(GT_CONTINUE)); ImGui::PopTextWrapPos();
 		ImGui::Spacing();
 		if (g_sd_armed && (keys_pressed(K_SIDE) || keys_pressed(K_UP) || keys_pressed(K_DOWN))) g_sd_sel ^= 1;
-		static const char *const names[2] = {"Yes", "No"};
+		const char *const names[2] = {game_text(GT_YES), game_text(GT_NO)};
 		for (int b = 0; b < 2; b++) {
 			if (b) ImGui::SameLine();
 			const bool sel = g_sd_sel == b;
@@ -388,11 +391,12 @@ static void build_save_dialog(float w, float hgt) {
 		}
 		if (ok) { answer = g_sd_sel ? SAVEDLG_NO : SAVEDLG_YES; answered = true; }
 		if (back) { answer = SAVEDLG_CANCEL; answered = true; }
-		ImGui::SameLine(); ImGui::TextDisabled("  Cross / Enter    Circle / Esc: back");
+		ImGui::SameLine(); ImGui::TextDisabled("  %s", game_text(GT_YESNO_HINT));
 	} else {   /* SAVEDLG_WAIT: the game closes it */
-		ImGui::PushTextWrapPos(0); ImGui::TextUnformatted(v.msg[0] ? v.msg : "Please wait..."); ImGui::PopTextWrapPos();
+		ImGui::PushTextWrapPos(0); ImGui::TextUnformatted(v.msg[0] ? v.msg : game_text(GT_WAIT)); ImGui::PopTextWrapPos();
 		if (v.percent >= 0) ImGui::ProgressBar(v.percent / 100.0f, ImVec2(-1, 0));
 	}
+	ImGui::PopFont();
 	ImGui::End();
 	const int seq = v.seq;
 	savedlg_release();   /* (before answering: savedlg_answer takes the same lock) */
@@ -427,7 +431,7 @@ static void build_closed(void) {
 		if (g_layout_ask && !g_layout_card && !g_intro && !g_open) { g_layout_card = true; g_open = true; apply_pause(); }   /* (the game waits for it: before the prep card) */
 		else if (ps == 1 && !g_intro && !g_open && !g_layout_card) { g_prep_card = true; g_open = true; apply_pause(); }
 		else if (ps == 2 && total > 0) build_prep_corner(w, hgt, done, total);
-		else if (ps == 3) overlay_toast_titled("Shaders ready", "Built for this computer: no more pauses to build them.", 4.0);
+		else if (ps == 3) overlay_toast_titled(game_text(GT_T_SHADERS_READY), game_text(GT_SHADERS_READY), 4.0);
 	}
 	if (g_intro) build_intro();   /* (the touch card in place of the pause banner; the markers drawn over it) */
 	build_marks();
@@ -631,10 +635,10 @@ static void build_intro(void) {
 #else
 	const char *alt = "Alt";
 #endif
-	char kbm[200], padb[240];
-	snprintf(kbm, sizeof kbm, "Hold %s and click to touch the screen. Right-click instead to touch the rear pad.", alt);
-	snprintf(padb, sizeof padb, "Hold %s and steer the cursor with a stick, then press %s to touch. %s does the same on the rear pad.%s", pl, pa, pr, tp ? " The touchpad works too." : "");
-	const struct { const char *name, *how; } devs[3] = {{"Keyboard and mouse", kbm}, {"Controller", padb}, {"Touch screen", "Touch the picture, as you would the Vita's own screen."}};
+	char kbm[256], padb[320];
+	snprintf(kbm, sizeof kbm, game_text(GT_I_KBM), alt);
+	snprintf(padb, sizeof padb, game_text(GT_I_PAD), pl, pa, pr, tp ? game_text(GT_I_TOUCHPAD) : "");
+	const struct { const char *name, *how; } devs[3] = {{game_text(GT_I_KBM_NAME), kbm}, {game_text(GT_I_PAD_NAME), padb}, {game_text(GT_I_TOUCH_NAME), game_text(GT_I_TOUCH)}};
 	const ImGuiViewport *vp = ImGui::GetMainViewport(); const float em = ImGui::GetFontSize();
 	ImGui::GetBackgroundDrawList()->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), ui::u32(ui::bg, 0.55f));   /* (the paused game, dimmed behind it) */
 	const float cw = fminf(vp->Size.x - 2 * em, 38 * em);
@@ -642,8 +646,8 @@ static void build_intro(void) {
 	ImGui::SetNextWindowSizeConstraints(ImVec2(cw, 0), ImVec2(cw, vp->Size.y - 2 * em));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(em * 1.4f, em * 1.2f));
 	ImGui::Begin("##touchcard", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);   /* (a click anywhere, the card too, is a touch) */
-	ui::heading(g_intro_done < 0 ? "Touching the screen" : "That's it", em * 1.35f);
-	ui::muted_wrapped("Vita games are played with the touch screen as well as buttons. Here's how to touch it:");
+	ui::heading(game_text(g_intro_done < 0 ? GT_I_TITLE : GT_I_DONE), em * 1.35f);
+	ui::muted_wrapped(game_text(GT_I_LEAD));
 	ImGui::Dummy(ImVec2(0, em * 0.2f));
 	const float dh = em * 3.8f, dw = dh * 3.3f;   /* each row's demonstration strip (intro_demo), at its right */
 	for (int d = 0; d < 3; d++) {
@@ -666,9 +670,9 @@ static void build_intro(void) {
 		ImGui::PopStyleVar(); ImGui::PopStyleColor(2);
 	}
 	ImGui::Dummy(ImVec2(0, em * 0.2f));
-	if (g_intro_done < 0) { ImGui::PushStyleColor(ImGuiCol_Text, ui::accent); ImGui::TextUnformatted("Try it now to continue."); ImGui::PopStyleColor(); }
-	else ImGui::TextUnformatted("Back to the game.");
-	ui::muted_wrapped("F1 opens the menu, with every control. Esc skips this.");
+	if (g_intro_done < 0) { ImGui::PushStyleColor(ImGuiCol_Text, ui::accent); ImGui::TextUnformatted(game_text(GT_I_TRY)); ImGui::PopStyleColor(); }
+	else ImGui::TextUnformatted(game_text(GT_I_BACK));
+	ui::muted_wrapped(game_text(GT_I_FOOT));
 	ImGui::End();
 	ImGui::PopStyleVar();
 }
@@ -679,7 +683,7 @@ static void fmt_count(char *out, size_t n, int v) {   /* 5837 -> "5,837" */
 	out[o] = 0;
 }
 static void build_prep_corner(float w, float hgt, int done, int total) {
-	char line[64]; snprintf(line, sizeof line, "Building shaders %d%%", total ? (int)(100.0 * done / total) : 0);
+	char line[96]; snprintf(line, sizeof line, game_text(GT_P_CORNER), total ? (int)(100.0 * done / total) : 0);
 	ImFont *font = ImGui::GetFont(); const float fs = ImGui::GetFontSize(), pad = fs * 0.5f;
 	const ImVec2 sz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, line);
 	const ImVec2 p0(w - sz.x - 3 * pad, hgt - sz.y - 3 * pad), p1(w - pad, hgt - pad);
@@ -696,7 +700,7 @@ static void build_prep(void) {
 	else ps = gfx_gpu_shader_prep(&done, &total, &eta);
 	if (ps != 1) {   /* the builds are done (or the card was never meant): back to the game */
 		g_prep_card = false; g_open = false; g_paused = false; apply_pause();
-		if (ps == 3) overlay_toast_titled("Shaders ready", "Built for this computer: no more pauses to build them.", 4.0);
+		if (ps == 3) overlay_toast_titled(game_text(GT_T_SHADERS_READY), game_text(GT_SHADERS_READY), 4.0);
 		return;
 	}
 	const ImGuiViewport *vp = ImGui::GetMainViewport(); const float em = ImGui::GetFontSize();
@@ -706,25 +710,26 @@ static void build_prep(void) {
 	ImGui::SetNextWindowSizeConstraints(ImVec2(cw, 0), ImVec2(cw, vp->Size.y - 2 * em));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(em * 1.4f, em * 1.2f));
 	ImGui::Begin("##prepcard", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
-	ui::heading("Preparing shaders", em * 1.35f);
-	const char *game = std::getenv("RECOMP_GAME_NAME"); char body[256];
-	snprintf(body, sizeof body, "Building %s's shaders for this computer, so it plays without pauses. This happens once: later starts are quick.", game && *game ? game : "the game");
+	ui::heading(game_text(GT_P_TITLE), em * 1.35f);
+	const char *game = std::getenv("RECOMP_GAME_NAME"); char body[384];
+	snprintf(body, sizeof body, game_text(GT_P_BODY), game && *game ? game : game_text(GT_THE_GAME));
 	ImGui::TextWrapped("%s", body);
 	ImGui::Dummy(ImVec2(0, em * 0.3f));
-	char a[16], b[16], over[48]; fmt_count(a, sizeof a, done); fmt_count(b, sizeof b, total); snprintf(over, sizeof over, "%s of %s", a, b);
+	char a[16], b[16], over[48]; fmt_count(a, sizeof a, done); fmt_count(b, sizeof b, total); snprintf(over, sizeof over, game_text(GT_P_OF), a, b);
 	ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ui::accent);
 	ImGui::ProgressBar(total ? (float)done / (float)total : 0.0f, ImVec2(-1, em * 1.4f), over);
 	ImGui::PopStyleColor();
-	char left[64];
-	if (eta < 0) snprintf(left, sizeof left, "Working out the time left");
-	else if (eta < 60) snprintf(left, sizeof left, "Less than a minute left");
-	else snprintf(left, sizeof left, "About %d minute%s left", (int)ceil(eta / 60), eta > 60 ? "s" : "");
+	char left[96];
+	if (eta < 0) snprintf(left, sizeof left, "%s", game_text(GT_P_ETA_UNKNOWN));
+	else if (eta < 60) snprintf(left, sizeof left, "%s", game_text(GT_P_ETA_LT1));
+	else if (eta <= 60) snprintf(left, sizeof left, "%s", game_text(GT_P_ETA_1));
+	else snprintf(left, sizeof left, game_text(GT_P_ETA_N), (int)ceil(eta / 60));
 	ui::muted_wrapped(left);
 	ImGui::Dummy(ImVec2(0, em * 0.4f));
 	if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-	if (ImGui::Button("Skip")) overlay_close();   /* (closing is Skip: overlay_close) */
+	if (ImGui::Button(game_text(GT_P_SKIP))) overlay_close();   /* (closing is Skip: overlay_close) */
 	ImGui::Dummy(ImVec2(0, em * 0.2f));
-	ui::muted_wrapped("Skipping starts the game now. You may see short pauses until the shaders are built: they keep building while you play.");
+	ui::muted_wrapped(game_text(GT_P_SKIP_NOTE));
 	ImGui::End();
 	ImGui::PopStyleVar();
 }
@@ -776,25 +781,30 @@ extern "C" int overlay_layout_ask(void) {   /* (the game's thread) */
 }
 /* ---- the quit card (this file's header) */
 static void build_quit(void) {
-	const ImGuiViewport *vp = ImGui::GetMainViewport(); const float em = ImGui::GetFontSize();
+	const ImGuiViewport *vp = ImGui::GetMainViewport();
+	ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * card_scale(vp->Size.y)); const float em = ImGui::GetFontSize();
 	ImGui::GetBackgroundDrawList()->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), ui::u32(ui::bg, 0.55f));
 	const char *game = std::getenv("RECOMP_GAME_NAME"); char title[160];
-	snprintf(title, sizeof title, "Quit %s?", game && *game ? game : "the game");
+	snprintf(title, sizeof title, game_text(GT_QUIT), game && *game ? game : game_text(GT_THE_GAME));
 	ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowSizeConstraints(ImVec2(fminf(vp->Size.x - 2 * em, 24 * em), 0), ImVec2(fminf(vp->Size.x - 2 * em, 24 * em), vp->Size.y));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(em * 1.4f, em * 1.2f));
 	ImGui::Begin("##quitcard", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
 	ui::heading(title, em * 1.35f);
-	ui::muted_wrapped("Progress since your last save will be lost.");
+	ui::muted_wrapped(game_text(GT_QUIT_LOST));
 	ImGui::Dummy(ImVec2(0, em * 0.3f));
 	if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-	if (ui::primary_button("Keep playing")) overlay_close();
+	if (ui::primary_button(game_text(GT_KEEP_PLAYING))) overlay_close();
 	ImGui::SameLine();
+	const bool launched = std::getenv("ABYSS_LAUNCHER") != nullptr;   /* (started by the launcher: back to it, or quit both) */
+	if (launched && ImGui::Button(game_text(GT_BACK_LAUNCHER))) g_want_quit = 1;
+	if (launched) ImGui::SameLine();
 	ImGui::PushStyleColor(ImGuiCol_Text, ui::error);
-	if (ImGui::Button(quit_label())) g_want_quit = true;
+	if (ImGui::Button(game_text(GT_QUIT_GAME))) g_want_quit = launched ? 2 : 1;
 	ImGui::PopStyleColor();
 	ImGui::End();
 	ImGui::PopStyleVar();
+	ImGui::PopFont();
 }
 void overlay_frame(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w, uint32_t h, double dt_s) {
 	if (!overlay_is_open()) return;

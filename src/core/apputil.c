@@ -21,6 +21,7 @@
 #include "overlay.h"   /* (overlay_toast_titled: the network check's notice) */
 #include "platform.h"
 #include "savedlg.h"
+#include "../launcher/game_texts.h"
 #include "settings.h"
 
 /* ---- common dialogs: one that was opened finishes at once with an OK result, as if the player
@@ -44,8 +45,8 @@ static void h_net_dlg_result(Cpu *c) {
 	if (A0) { WR32(A0, 0); WR32(A0 + 4, net_online() ? 1 : 0); }
 	if (!net_online() && net_online_needs()) {   /* the game went for its online modes on a version they aren't for: say why it can't (net.h) */
 		static double told; const double now = (double)time(0);
-		if (now - told > 20) { told = now; char b[200]; snprintf(b, sizeof b, "This copy of the game isn't the version online play is for. Add update %s in the launcher, then play again.", net_online_needs());
-			char t[64]; snprintf(t, sizeof t, "Online play needs update %s", net_online_needs()); overlay_toast_titled(t, b, 10); }
+		if (now - told > 20) { told = now; char b[320]; snprintf(b, sizeof b, game_text(GT_ONLINE), net_online_needs());
+			char t[96]; snprintf(t, sizeof t, game_text(GT_T_ONLINE), net_online_needs()); overlay_toast_titled(t, b, 10); }
 	}
 	RET(0);
 }
@@ -196,7 +197,7 @@ static void sd_add_row(uint32_t id, uint32_t empty) {
 		slot_text(p + 0x44, 128, r->sub, sizeof r->sub);
 		const uint8_t *d = p + 0xc4; while (*d == '\n' || *d == '\r') d++;   /* (Uncharted's detail starts with a line break) */
 		slot_text(d, 512 - (size_t)(d - (p + 0xc4)), r->detail, sizeof r->detail);
-		if (!r->title[0]) snprintf(r->title, sizeof r->title, "Saved data %u", id);
+		if (!r->title[0]) snprintf(r->title, sizeof r->title, game_text(GT_DATA_N), id);
 		uint16_t t[6]; memcpy(t, p + 0x30c, sizeof t);
 		if (t[0]) snprintf(r->date, sizeof r->date, "%04u-%02u-%02u %02u:%02u", t[0], t[1], t[2], t[3], t[4]);
 		else {   /* a marker from before slots kept their param: the file's own time */
@@ -207,7 +208,7 @@ static void sd_add_row(uint32_t id, uint32_t empty) {
 		if (!empty) return;
 		uint32_t t = RD32(empty);
 		if (t) slot_text(G(t), 64, r->title, sizeof r->title);
-		if (!r->title[0]) snprintf(r->title, sizeof r->title, "New Saved Data");
+		if (!r->title[0]) snprintf(r->title, sizeof r->title, "%s", game_text(GT_NEW_DATA));
 	}
 	sd.nrows++;
 }
@@ -259,14 +260,14 @@ static void sd_step(uint32_t prm, int init) {
 	sd.status = sd.sub = ST_RUNNING; sd.result = 0; sd.button = 0;
 	sd.kind = SAVEDLG_NONE; sd.percent = -1; sd.title[0] = sd.msg[0] = 0; sd.seq++;
 	uint32_t target = 0; int buttons = -1;   /* a card's slot; its buttons (0 none, 1 OK, 2 yes/no) */
-	static const char *const sysmsg[] = {0, "There is no saved data.", 0, "Do you want to overwrite this saved data?", 0, 0, 0, 0, "The saved data is corrupted.", "There is not enough free space to save.", 0, 0, "There is no saved data that can be used with this application."};
+	const char *const sysmsg[] = {0, game_text(GT_NO_DATA), 0, game_text(GT_OVERWRITE), 0, 0, 0, 0, game_text(GT_CORRUPTED), game_text(GT_NO_SPACE), 0, 0, game_text(GT_NO_USABLE)};
 	switch (mode) {
 	case 1: target = RD32(prm + 0x58); sd.sub = ST_FINISHED; break;   /* FIXED (targetSlot +0): nothing to browse, done at once */
 	case 2: {   /* LIST: slotList +0, slotListSize +4, focus +8/+0xc, listTitle +0x10 */
 		uint32_t lp = RD32(prm + 0x5c); if (!lp) break;
 		uint32_t list = RD32(lp), n = RD32(lp + 4), lt = RD32(lp + 0x10);
 		if (n > 256) n = 256;
-		snprintf(sd.title, sizeof sd.title, "%s", lt ? (const char *)G(lt) : sd_verb("Save", "Load", "Delete"));
+		snprintf(sd.title, sizeof sd.title, "%s", lt ? (const char *)G(lt) : sd_verb(game_text(GT_SAVE), game_text(GT_LOAD), game_text(GT_DELETE)));
 		sd.nrows = 0;
 		for (uint32_t i = 0; i < n; i++) if (RD32(list + 16 * i) >= 256) {   /* an id past the 256 slots: the step fails at once, slot -1 */
 			sd.slot = ~0u; sd.result = (int)0x80100b01; sd.sub = ST_FINISHED; return;   /* SCE_SAVEDATA_DIALOG_ERROR_PARAM */
@@ -288,11 +289,11 @@ static void sd_step(uint32_t prm, int init) {
 		if (init && !disp) { sd.slot = ~0u; sd.result = (int)0x80100b01; sd.status = ST_FINISHED; return; }   /* (the console: an Init with no dispType ends the dialog with ERROR_PARAM; a Continue's 0 keeps the dialog's) */
 		uint32_t type = RD32(sp); target = sp + 8;
 		switch (type) {
-		case 2: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb("Do you want to save?", "Do you want to load this saved data?", "Do you want to delete this saved data?")); buttons = 2; break;   /* CONFIRM */
+		case 2: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb(game_text(GT_ASK_SAVE), game_text(GT_ASK_LOAD), game_text(GT_ASK_DELETE))); buttons = 2; break;   /* CONFIRM */
 		case 3: buttons = 2; break;   /* OVERWRITE */
-		case 5: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb("Saving... Do not power off the system.", "Loading...", "Please wait...")); buttons = 0; break;   /* PROGRESS */
-		case 6: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb("Saving complete.", "Loading complete.", "Deletion complete.")); buttons = 1; break;   /* FINISHED */
-		case 7: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb("Do you want to cancel saving?", "Do you want to cancel loading?", "Do you want to cancel deleting?")); buttons = 2; break;   /* CONFIRM_CANCEL */
+		case 5: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb(game_text(GT_SAVING_POWER), game_text(GT_LOADING), game_text(GT_WAIT))); buttons = 0; break;   /* PROGRESS */
+		case 6: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb(game_text(GT_SAVED), game_text(GT_LOADED), game_text(GT_DELETED))); buttons = 1; break;   /* FINISHED */
+		case 7: snprintf(sd.msg, sizeof sd.msg, "%s", sd_verb(game_text(GT_CANCEL_SAVE), game_text(GT_CANCEL_LOAD), game_text(GT_CANCEL_DELETE))); buttons = 2; break;   /* CONFIRM_CANCEL */
 		case 4: buttons = 0; break;   /* NOSPACE: an information card */
 		default: buttons = 1; break;  /* NODATA, FILE_CORRUPTED, NOSPACE_CONTINUABLE, NODATA_IMPORT */
 		}
@@ -301,13 +302,13 @@ static void sd_step(uint32_t prm, int init) {
 	}
 	case 5: {   /* ERROR_CODE: errorCode +0, targetSlot +4 */
 		uint32_t ep = RD32(prm + 0x68); if (!ep) break;
-		snprintf(sd.msg, sizeof sd.msg, "An error occurred. (%08X)", RD32(ep)); target = ep + 4; buttons = 1;
+		snprintf(sd.msg, sizeof sd.msg, game_text(GT_ERROR), RD32(ep)); target = ep + 4; buttons = 1;
 		break;
 	}
 	case 6: {   /* PROGRESS_BAR: msg +0x3c, targetSlot +0x40 */
 		uint32_t pp = RD32(prm + 0x6c); if (!pp) break;
 		uint32_t m = RD32(pp + 0x3c); target = pp + 0x40;
-		snprintf(sd.msg, sizeof sd.msg, "%s", m ? (const char *)G(m) : sd_verb("Saving...", "Loading...", "Please wait..."));
+		snprintf(sd.msg, sizeof sd.msg, "%s", m ? (const char *)G(m) : sd_verb(game_text(GT_SAVING), game_text(GT_LOADING), game_text(GT_WAIT)));
 		sd.percent = 0; buttons = 0;
 		break;
 	}
@@ -318,7 +319,7 @@ static void sd_step(uint32_t prm, int init) {
 	else if (buttons == 1) {   /* OK alone: answered at once, the message as a toast */
 		extern void overlay_toast_titled(const char *title, const char *body, double seconds);
 		sd.button = 1; sd.sub = ST_FINISHED;
-		if (sd.msg[0]) overlay_toast_titled("Saves", sd.msg, 3.0);
+		if (sd.msg[0]) overlay_toast_titled(game_text(GT_SAVED_DATA), sd.msg, 3.0);
 	}
 	fprintf(stderr, "    save dialog: %s mode %d (%s), slot %d%s%s%s\n", init ? "init" : "continue", mode, sd_verb("save", "load", "delete"), (int)sd.slot,
 		sd.kind == SAVEDLG_LIST ? ", a list" : "", sd.msg[0] ? ": " : "", sd.msg);

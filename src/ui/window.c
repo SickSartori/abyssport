@@ -167,11 +167,10 @@ static void tilt_section_update(void) {
 	uint64_t t = __atomic_load_n(&tilt_tick_ns, __ATOMIC_RELAXED);
 	int on = t && SDL_GetTicksNS() - t < 250000000ull;
 	if (on && !tilt_section) {   /* what tilts, as a badge (overlay.cpp) */
-		const char *title = tilt_kind == 2 ? "Slide" : "Balance", *verb = tilt_kind == 2 ? "steer" : "tilt";
-		char msg[160];
-		if (kbm_on) snprintf(msg, sizeof msg, "[%s] [%s] %s left / right", SDL_GetKeyName(kb_binds[KB_MOVE_LEFT].kc), SDL_GetKeyName(kb_binds[KB_MOVE_RIGHT].kc), verb);
-		else if (!pad_gyro) snprintf(msg, sizeof msg, "Left stick: %s left / right", verb);
-		else snprintf(msg, sizeof msg, "Tilt the controller to %s", verb);
+		const int slide = tilt_kind == 2; const char *title = game_text(slide ? GT_T_SLIDE : GT_T_BALANCE);
+		char msg[200];
+		if (kbm_on) snprintf(msg, sizeof msg, game_text(slide ? GT_SLIDE_KEYS : GT_BAL_KEYS), SDL_GetKeyName(kb_binds[KB_MOVE_LEFT].kc), SDL_GetKeyName(kb_binds[KB_MOVE_RIGHT].kc));
+		else snprintf(msg, sizeof msg, "%s", game_text(!pad_gyro ? (slide ? GT_SLIDE_STICK : GT_BAL_STICK) : (slide ? GT_SLIDE_GYRO : GT_BAL_GYRO)));
 		overlay_toast_titled(title, msg, 5.0);
 	}
 	tilt_section = on;
@@ -186,9 +185,7 @@ static void touch_prompt_update(void) {
 	int on = t && SDL_GetTicksNS() - t < 500000000ull;
 	if (on && !was && shown < 3) {
 		shown++;
-		overlay_toast_titled("Touch", kbm_on ? "Hold [Alt]: the cursor is a finger. The left button touches the screen, the right button the back"
-		                     : shoulders_swapped ? "The touchpad, or hold [L2]: a stick moves the finger, Cross touches"
-		                     : "The touchpad, or hold [L1]: a stick moves the finger, Cross touches", 6.0);
+		overlay_toast_titled(game_text(GT_T_TOUCH), game_text(kbm_on ? GT_TOUCH_KBM : shoulders_swapped ? GT_TOUCH_PAD_L2 : GT_TOUCH_PAD_L1), 6.0);
 	}
 	was = on;
 }
@@ -283,7 +280,7 @@ int window_raw_look(void) {
 void window_set_raw_look(int on) { raw_look = on != 0; settings_set_int("raw_look", raw_look); settings_save(); }
 static void raw_look_toggle(void) {
 	window_set_raw_look(!window_raw_look());
-	overlay_toast_titled("Mouse aim", raw_look ? "Direct: the game turns as far as the mouse moves [F8]" : "Stick: the mouse drives the right stick [F8]", 3.0);
+	overlay_toast_titled(game_text(GT_T_MOUSE_AIM), game_text(raw_look ? GT_AIM_DIRECT : GT_AIM_STICK), 3.0);
 }
 static int kb_find(SDL_Keycode k) { for (int i = 0; i < KB_N; i++) if (kb_binds[i].kc == k && k != SDLK_UNKNOWN) return i; return -1; }
 
@@ -991,14 +988,15 @@ void window_run(void *(*fn)(void *), void *arg) {
 			/* the overlay itself: always live, open or not, so it can always be reached and always
 			 * closed. Opening (or re-opening by the same gamepad combo) clears whatever buttons/touch
 			 * were down so the game never sees them as still held on resume. */
-			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1) { fprintf(stderr, "    menu: F1\n"); overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) { if (overlay_is_open()) overlay_escape(); else overlay_bar_dismiss(); }   /* (open: the menu takes it below, as a step back) */
-			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			/* (some pads send Guide for Select+Start too, right after the two: it would close what the combo just opened) */
+			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE && !(pad_back && pad_start)) { fprintf(stderr, "    menu: the pad's Guide button\n"); overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) pad_back = 1;
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_UP && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) { pad_back = 0; pad_combo_latch = 0; }
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_START) pad_start = 1;
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_UP && e.gbutton.button == SDL_GAMEPAD_BUTTON_START) { pad_start = 0; pad_combo_latch = 0; }
-			if (pad_back && pad_start && !pad_combo_latch) { pad_combo_latch = 1; overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			if (pad_back && pad_start && !pad_combo_latch) { pad_combo_latch = 1; fprintf(stderr, "    menu: Select+Start\n"); overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			/* exclusive while open: the menu gets every key/mouse/gamepad event instead of the game
 			 * (which is paused anyway -- display.c) */
 			if (overlay_is_open()) { overlay_process_event(&e); continue; }
@@ -1159,7 +1157,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (on && pstv) { kbm_used(); on = 0; }
 			static int said;
 			if (on != kbm_on) { extern uint64_t display_frames(void); fprintf(stderr, "    input: %s (%s%s, frame %llu)\n", on ? "keyboard and mouse" : "the controller", strcmp(mode, "auto") ? "Play with: " : "", strcmp(mode, "auto") ? mode : kbm_why[0] ? kbm_why : "start", (unsigned long long)display_frames()); }
-			if (on && !kbm_on && !said) { said = 1; overlay_toast_titled("Keyboard & mouse", "The mouse looks and aims -- hold [Alt] for the cursor\nControls: [F1]", 6.0); }
+			if (on && !kbm_on && !said) { said = 1; overlay_toast_titled(game_text(GT_T_KBM), game_text(GT_KBM_HINT), 6.0); }
 			if (on != kbm_on) __atomic_add_fetch(&glyph_gen, 1, __ATOMIC_RELAXED);   /* the game's button glyphs: keys or the console's */
 			kbm_on = on;
 			int want = (on || (window_raw_look() && !pstv)) && settings_int("mouse_look", 1) && !overlay_is_open() && !overlay_dialog_active() && win && (SDL_GetWindowFlags(win) & SDL_WINDOW_INPUT_FOCUS) && !(SDL_GetModState() & SDL_KMOD_ALT);
@@ -1276,7 +1274,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			} else twist_pad = 0;
 			twist_down = twist_pad || twist_drag;
 			static int was, shown;   /* the prompt, the first few valves of a session */
-			if (w && !was && shown < 3) { shown++; overlay_toast_titled("Two-finger turn", kbm_on ? "Hold the left button and drag down / up" : "Push both sticks out and roll them", 4.0); }
+			if (w && !was && shown < 3) { shown++; overlay_toast_titled(game_text(GT_T_TWIST), game_text(kbm_on ? GT_TWIST_KBM : GT_TWIST_PAD), 4.0); }
 			if (!w && was) fprintf(stderr, "    touch twist: the game stopped asking for it\n");
 			was = w;
 		}
@@ -1289,7 +1287,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (inflight < 16) busy_since = 0; else if (!busy_since) busy_since = t;
 			static int burst; if (t - win_t >= 500000) { burst = total_ms - win_total > 150; win_t = t; win_total = total_ms; }
 			if (wait_ms > 300 || burst || (busy_since && t - busy_since > 1000000))
-				overlay_toast_titled("Compiling shaders", "Building this area's graphics for the first time", 0.6);
+				overlay_toast_titled(game_text(GT_T_COMPILING), game_text(GT_COMPILING), 0.6);
 		}
 		{	/* the bumper cursor: either stick moves it (both add up), full deflection crossing the panel's
 			 * width in about 1.3 s times the "touch_cursor_speed" setting; a small deadzone each keeps it still at rest */
@@ -1358,7 +1356,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			}
 			was_open = open;
 		}
-		if (overlay_wants_quit()) { extern void host_summary(const char *why); extern void gfx_gpu_quit(void); host_summary("window closed"); gfx_gpu_quit(); _exit(0); }
+		{ const int quit = overlay_wants_quit(); if (quit) { extern void host_summary(const char *why); extern void gfx_gpu_quit(void); host_summary("window closed"); gfx_gpu_quit(); _exit(quit == 2 ? 3 : 0); } }   /* (3: the launcher that started it closes too) */
 		if (overlay_wants_capture()) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (overlay)\n"); }
 
 

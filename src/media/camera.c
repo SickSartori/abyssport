@@ -29,6 +29,7 @@
 #include "gfx.h"
 #include "settings.h"
 #include "overlay.h"
+#include "../launcher/game_texts.h"
 
 #define CAM_ERR_PARAM 0x802E0000u
 #define CAM_ERR_ALREADY_OPEN 0x802E0003u
@@ -68,7 +69,7 @@ void camera_light_set(int on) { light_on = on != 0; }
 void camera_light_toggle(void) {
 	light_on = !camera_light();
 	fprintf(stderr, "camera: lamp %s (F7)\n", light_on ? "on" : "off");
-	overlay_toast_titled("Camera", light_on ? "Lamp on: the Vita's camera sees a bright light [F7]" : "Lamp off: the Vita's camera sees a dark room [F7]", 3.0);
+	overlay_toast_titled(game_text(GT_T_CAMERA), game_text(light_on ? GT_CAM_LAMP_ON : GT_CAM_LAMP_OFF), 3.0);
 }
 
 static int source(void) {   /* 0 light, 1 webcam, 2 dark */
@@ -208,9 +209,7 @@ static void h_start(Cpu *c) {
 	static int said;   /* what the camera sees, once a session: a puzzle may be waiting on it */
 	if (!said) {
 		said = 1; int src = source();
-		overlay_toast_titled("Camera", src == 1 ? "The game is using the Vita's camera: your computer's camera stands in for it\nChange it: [F1] > Controls"
-		              : src == 0 && camera_light() ? "The game is using the Vita's camera: it sees a bright lamp\n[F7] turns it off"
-		              : "The game is using the Vita's camera: it sees a dark room\n[F7] shines a lamp into it", 6.0);
+		overlay_toast_titled(game_text(GT_T_CAMERA), game_text(src == 1 ? GT_CAM_PC : src == 0 && camera_light() ? GT_CAM_LAMP : GT_CAM_DARK), 6.0);
 	}
 	RET(0);
 }

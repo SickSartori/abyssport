@@ -55,6 +55,7 @@
 #include "third_party/stb/stb_image.h"   // the runtime's (src/media/jpeg.c): PNG and JPEG, from memory only
 #include "launcher_game.h"
 #endif
+#include "game_texts.h"
 
 extern "C" {
 #include "settings.h"
@@ -460,7 +461,7 @@ const Texts kSpanish = {
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
 // ABYSS_LAUNCHER_LANGUAGE=en|it|pt|es overrides both, for test screenshots.
-const Texts& T() {
+std::string launcher_language() {
     char forced[8] = {};
     std::string language = GetEnvironmentVariableA("ABYSS_LAUNCHER_LANGUAGE", forced, sizeof(forced)) ? forced
                                                                                                     : setting("launcher_language", "auto");
@@ -468,14 +469,156 @@ const Texts& T() {
         const WORD windows = PRIMARYLANGID(GetUserDefaultUILanguage());
         language = windows == LANG_ITALIAN ? "it" : windows == LANG_PORTUGUESE ? "pt" : windows == LANG_SPANISH ? "es" : "en";
     }
+    return language;
+}
+const Texts& T() {
+    const std::string language = launcher_language();
     return language == "it" ? kItalian : language == "pt" ? kPortuguese : language == "es" ? kSpanish : kEnglish;
 }
+
+// The runtime's cards over the game (game_texts.h), in GameText's order.
+const char* const kGameTextsEnglish[GT_COUNT] = {
+    "Save", "Load", "Delete",
+    "Do you want to save?", "Do you want to load this saved data?", "Do you want to delete this saved data?",
+    "Saving... Do not power off the system.", "Loading...", "Please wait...",
+    "Saving complete.", "Loading complete.", "Deletion complete.",
+    "Do you want to cancel saving?", "Do you want to cancel loading?", "Do you want to cancel deleting?",
+    "There is no saved data.", "Do you want to overwrite this saved data?", "The saved data is corrupted.",
+    "There is not enough free space to save.", "There is no saved data that can be used with this application.",
+    "An error occurred. (%08X)",
+    "Saving...",
+    "New Saved Data", "Saved data %u", "Saved data", "(empty)",
+    "Cross / Enter: choose    Circle / Esc: back", "Cross / Enter    Circle / Esc: back", "Back", "Yes", "No", "Continue?",
+    "Quit %s?", "the game", "Progress since your last save will be lost.", "Keep playing", "Quit game", "Back to the launcher",
+    "Menu", "[F1], the PS button or Select+Start: settings, controls, back to the launcher", "Balance",
+    "Slide", "[%s] [%s] tilt left / right", "[%s] [%s] steer left / right",
+    "Left stick: tilt left / right", "Left stick: steer left / right", "Tilt the controller to tilt",
+    "Tilt the controller to steer", "Shaders ready", "Built for this computer: no more pauses to build them.",
+    "Compiling shaders", "Building this area's graphics for the first time", "Touch",
+    "Hold [Alt]: the cursor is a finger. The left button touches the screen, the right button the back", "The touchpad, or hold [L2]: a stick moves the finger, Cross touches", "The touchpad, or hold [L1]: a stick moves the finger, Cross touches",
+    "Mouse aim", "Direct: the game turns as far as the mouse moves [F8]", "Stick: the mouse drives the right stick [F8]",
+    "Keyboard & mouse", "The mouse looks and aims -- hold [Alt] for the cursor\nControls: [F1]", "Two-finger turn",
+    "Hold the left button and drag down / up", "Push both sticks out and roll them", "FSR 3.1 anti-aliasing on",
+    "FSR 3.1 anti-aliasing off", "Camera", "Lamp on: the Vita's camera sees a bright light [F7]",
+    "Lamp off: the Vita's camera sees a dark room [F7]", "The game is using the Vita's camera: your computer's camera stands in for it\nChange it: [F1] > Controls", "The game is using the Vita's camera: it sees a bright lamp\n[F7] turns it off",
+    "The game is using the Vita's camera: it sees a dark room\n[F7] shines a lamp into it", "Online play needs update %s", "This copy of the game isn't the version online play is for. Add update %s in the launcher, then play again.",
+    "Touching the screen", "That's it", "Vita games are played with the touch screen as well as buttons. Here's how to touch it:",
+    "Keyboard and mouse", "Hold %s and click to touch the screen. Right-click instead to touch the rear pad.", "Controller",
+    "Hold %s and steer the cursor with a stick, then press %s to touch. %s does the same on the rear pad.%s", " The touchpad works too.", "Touch screen",
+    "Touch the picture, as you would the Vita's own screen.", "Try it now to continue.", "Back to the game.",
+    "F1 opens the menu, with every control. Esc skips this.", "Building shaders %d%%", "Preparing shaders",
+    "Building %s's shaders for this computer, so it plays without pauses. This happens once: later starts are quick.", "%s of %s", "Working out the time left",
+    "Less than a minute left", "About 1 minute left", "About %d minutes left",
+    "Skip", "Skipping starts the game now. You may see short pauses until the shaders are built: they keep building while you play.",
+};
+const char* const kGameTextsItalian[GT_COUNT] = {
+    "Salva", "Carica", "Elimina",
+    "Vuoi salvare?", "Vuoi caricare questi dati salvati?", "Vuoi eliminare questi dati salvati?",
+    "Salvataggio in corso... Non spegnere il sistema.", "Caricamento in corso...", "Attendere...",
+    "Salvataggio completato.", "Caricamento completato.", "Eliminazione completata.",
+    "Vuoi annullare il salvataggio?", "Vuoi annullare il caricamento?", "Vuoi annullare l'eliminazione?",
+    "Non ci sono dati salvati.", "Vuoi sovrascrivere questi dati salvati?", "I dati salvati sono danneggiati.",
+    "Non c'\xC3\xA8 abbastanza spazio libero per salvare.", "Non ci sono dati salvati utilizzabili con questa applicazione.",
+    "Si \xC3\xA8 verificato un errore. (%08X)",
+    "Salvataggio in corso...",
+    "Nuovi dati salvati", "Dati salvati %u", "Dati salvati", "(vuoto)",
+    "Croce / Invio: scegli    Cerchio / Esc: indietro", "Croce / Invio    Cerchio / Esc: indietro", "Indietro", "S\xC3\xAC", "No", "Continuare?",
+    "Uscire da %s?", "il gioco", "I progressi dall'ultimo salvataggio andranno persi.", "Continua a giocare", "Esci dal gioco", "Torna al launcher",
+    "Menu", "[F1], il tasto PS o Select+Start: impostazioni, comandi, ritorno al launcher", "Equilibrio",
+    "Scivolata", "[%s] [%s] inclina a sinistra / destra", "[%s] [%s] sterza a sinistra / destra",
+    "Levetta sinistra: inclina a sinistra / destra", "Levetta sinistra: sterza a sinistra / destra", "Inclina il controller per restare in equilibrio",
+    "Inclina il controller per sterzare", "Shader pronti", "Preparati per questo computer: niente più pause per costruirli.",
+    "Compilazione shader", "Preparo la grafica di questa zona per la prima volta", "Tocco",
+    "Tieni premuto [Alt]: il cursore è un dito. Il tasto sinistro tocca lo schermo, il destro il retro", "Il touchpad, o tieni premuto [L2]: una levetta muove il dito, Croce tocca", "Il touchpad, o tieni premuto [L1]: una levetta muove il dito, Croce tocca",
+    "Mira col mouse", "Diretta: il gioco gira quanto si muove il mouse [F8]", "Levetta: il mouse muove la levetta destra [F8]",
+    "Tastiera e mouse", "Il mouse guarda e mira; tieni premuto [Alt] per il cursore\nComandi: [F1]", "Rotazione a due dita",
+    "Tieni premuto il tasto sinistro e trascina giù / su", "Spingi le due levette in fuori e ruotale", "Anti-aliasing FSR 3.1 attivo",
+    "Anti-aliasing FSR 3.1 disattivato", "Fotocamera", "Lampada accesa: la fotocamera della Vita vede una luce forte [F7]",
+    "Lampada spenta: la fotocamera della Vita vede una stanza buia [F7]", "Il gioco usa la fotocamera della Vita: la sostituisce la fotocamera del computer\nPer cambiarla: [F1] > Comandi", "Il gioco usa la fotocamera della Vita: vede una lampada accesa\n[F7] la spegne",
+    "Il gioco usa la fotocamera della Vita: vede una stanza buia\n[F7] accende una lampada", "Il gioco online richiede l'aggiornamento %s", "Questa copia del gioco non è la versione per il gioco online. Aggiungi l'aggiornamento %s nel launcher, poi gioca di nuovo.",
+    "Toccare lo schermo", "Fatto", "I giochi Vita si giocano con il touch screen oltre che con i tasti. Ecco come toccarlo:",
+    "Tastiera e mouse", "Tieni premuto %s e fai clic per toccare lo schermo. Con il tasto destro tocchi invece il pannello posteriore.", "Controller",
+    "Tieni premuto %s e muovi il cursore con una levetta, poi premi %s per toccare. %s fa lo stesso sul pannello posteriore.%s", " Funziona anche il touchpad.", "Touch screen",
+    "Tocca l'immagine, come faresti sullo schermo della Vita.", "Provalo ora per continuare.", "Si torna al gioco.",
+    "F1 apre il menu, con tutti i comandi. Esc salta questa schermata.", "Preparazione shader %d%%", "Preparazione degli shader",
+    "Preparo gli shader di %s per questo computer, così si gioca senza pause. Succede una volta sola: gli avvii successivi sono rapidi.", "%s di %s", "Calcolo del tempo che manca",
+    "Manca meno di un minuto", "Manca circa 1 minuto", "Mancano circa %d minuti",
+    "Salta", "Saltando, il gioco parte subito. Potresti vedere brevi pause finché gli shader non sono pronti: continuano a prepararsi mentre giochi.",
+};
+const char* const kGameTextsPortuguese[GT_COUNT] = {
+    "Salvar", "Carregar", "Excluir",
+    "Deseja salvar?", "Deseja carregar estes dados salvos?", "Deseja excluir estes dados salvos?",
+    "Salvando... N\xC3\xA3o desligue o sistema.", "Carregando...", "Aguarde...",
+    "Salvamento conclu\xC3\xAD" "do.", "Carregamento conclu\xC3\xAD" "do.", "Exclus\xC3\xA3o conclu\xC3\xAD" "da.",
+    "Deseja cancelar o salvamento?", "Deseja cancelar o carregamento?", "Deseja cancelar a exclus\xC3\xA3o?",
+    "N\xC3\xA3o h\xC3\xA1 dados salvos.", "Deseja substituir estes dados salvos?", "Os dados salvos est\xC3\xA3o corrompidos.",
+    "N\xC3\xA3o h\xC3\xA1 espa\xC3\xA7o livre suficiente para salvar.", "N\xC3\xA3o h\xC3\xA1 dados salvos que possam ser usados com este aplicativo.",
+    "Ocorreu um erro. (%08X)",
+    "Salvando...",
+    "Novos dados salvos", "Dados salvos %u", "Dados salvos", "(vazio)",
+    "X / Enter: escolher    C\xC3\xADrculo / Esc: voltar", "X / Enter    C\xC3\xADrculo / Esc: voltar", "Voltar", "Sim", "N\xC3\xA3o", "Continuar?",
+    "Sair de %s?", "o jogo", "O progresso desde o \xC3\xBAltimo salvamento ser\xC3\xA1 perdido.", "Continuar jogando", "Sair do jogo", "Voltar ao launcher",
+    "Menu", "[F1], o botão PS ou Select+Start: configurações, controles, voltar ao launcher", "Equilíbrio",
+    "Deslizamento", "[%s] [%s] incline para a esquerda / direita", "[%s] [%s] vire para a esquerda / direita",
+    "Analógico esquerdo: incline para a esquerda / direita", "Analógico esquerdo: vire para a esquerda / direita", "Incline o controle para se equilibrar",
+    "Incline o controle para virar", "Shaders prontos", "Preparados para este computador: sem mais pausas para criá-los.",
+    "Compilando shaders", "Preparando os gráficos desta área pela primeira vez", "Toque",
+    "Segure [Alt]: o cursor é um dedo. O botão esquerdo toca a tela, o direito a traseira", "O touchpad, ou segure [L2]: um analógico move o dedo, X toca", "O touchpad, ou segure [L1]: um analógico move o dedo, X toca",
+    "Mira com o mouse", "Direta: o jogo gira o quanto o mouse se move [F8]", "Analógico: o mouse move o analógico direito [F8]",
+    "Teclado e mouse", "O mouse olha e mira; segure [Alt] para o cursor\nControles: [F1]", "Giro com dois dedos",
+    "Segure o botão esquerdo e arraste para baixo / cima", "Empurre os dois analógicos para fora e gire-os", "Anti-aliasing FSR 3.1 ligado",
+    "Anti-aliasing FSR 3.1 desligado", "Câmera", "Lâmpada acesa: a câmera do Vita vê uma luz forte [F7]",
+    "Lâmpada apagada: a câmera do Vita vê um quarto escuro [F7]", "O jogo está usando a câmera do Vita: a câmera do seu computador a substitui\nPara mudar: [F1] > Controles", "O jogo está usando a câmera do Vita: ela vê uma lâmpada acesa\n[F7] a apaga",
+    "O jogo está usando a câmera do Vita: ela vê um quarto escuro\n[F7] acende uma lâmpada", "O jogo online precisa da atualização %s", "Esta cópia do jogo não é a versão do jogo online. Adicione a atualização %s no launcher e jogue de novo.",
+    "Tocar na tela", "Pronto", "Os jogos de Vita usam a tela sensível ao toque além dos botões. Veja como tocá-la:",
+    "Teclado e mouse", "Segure %s e clique para tocar a tela. Clique com o botão direito para tocar o painel traseiro.", "Controle",
+    "Segure %s e mova o cursor com um analógico, depois pressione %s para tocar. %s faz o mesmo no painel traseiro.%s", " O touchpad também funciona.", "Tela sensível ao toque",
+    "Toque na imagem, como faria na tela do Vita.", "Experimente agora para continuar.", "De volta ao jogo.",
+    "F1 abre o menu, com todos os controles. Esc pula esta tela.", "Criando shaders %d%%", "Preparando os shaders",
+    "Criando os shaders de %s para este computador, para jogar sem pausas. Isso acontece uma vez: as próximas inicializações são rápidas.", "%s de %s", "Calculando o tempo restante",
+    "Falta menos de um minuto", "Falta cerca de 1 minuto", "Faltam cerca de %d minutos",
+    "Pular", "Pulando, o jogo começa agora. Você pode ver pausas curtas até os shaders ficarem prontos: eles continuam sendo criados enquanto você joga.",
+};
+const char* const kGameTextsSpanish[GT_COUNT] = {
+    "Guardar", "Cargar", "Eliminar",
+    "\xC2\xBFQuieres guardar?", "\xC2\xBFQuieres cargar estos datos guardados?", "\xC2\xBFQuieres eliminar estos datos guardados?",
+    "Guardando... No apagues el sistema.", "Cargando...", "Espera...",
+    "Guardado completado.", "Carga completada.", "Eliminaci\xC3\xB3n completada.",
+    "\xC2\xBFQuieres cancelar el guardado?", "\xC2\xBFQuieres cancelar la carga?", "\xC2\xBFQuieres cancelar la eliminaci\xC3\xB3n?",
+    "No hay datos guardados.", "\xC2\xBFQuieres sobrescribir estos datos guardados?", "Los datos guardados est\xC3\xA1n da\xC3\xB1" "ados.",
+    "No hay suficiente espacio libre para guardar.", "No hay datos guardados que se puedan usar con esta aplicaci\xC3\xB3n.",
+    "Se ha producido un error. (%08X)",
+    "Guardando...",
+    "Nuevos datos guardados", "Datos guardados %u", "Datos guardados", "(vac\xC3\xADo)",
+    "Cruz / Intro: elegir    C\xC3\xADrculo / Esc: volver", "Cruz / Intro    C\xC3\xADrculo / Esc: volver", "Volver", "S\xC3\xAD", "No", "\xC2\xBF" "Continuar?",
+    "\xC2\xBFSalir de %s?", "el juego", "Se perder\xC3\xA1 el progreso desde el \xC3\xBAltimo guardado.", "Seguir jugando", "Salir del juego", "Volver al launcher",
+    "Menú", "[F1], el botón PS o Select+Start: ajustes, controles, volver al launcher", "Equilibrio",
+    "Deslizamiento", "[%s] [%s] inclina a la izquierda / derecha", "[%s] [%s] gira a la izquierda / derecha",
+    "Joystick izquierdo: inclina a la izquierda / derecha", "Joystick izquierdo: gira a la izquierda / derecha", "Inclina el mando para mantener el equilibrio",
+    "Inclina el mando para girar", "Shaders listos", "Preparados para este ordenador: no habrá más pausas para crearlos.",
+    "Compilando shaders", "Preparando los gráficos de esta zona por primera vez", "Táctil",
+    "Mantén [Alt]: el cursor es un dedo. El botón izquierdo toca la pantalla, el derecho la parte trasera", "El panel táctil, o mantén [L2]: un joystick mueve el dedo, Cruz toca", "El panel táctil, o mantén [L1]: un joystick mueve el dedo, Cruz toca",
+    "Apuntar con el ratón", "Directo: el juego gira lo que se mueve el ratón [F8]", "Joystick: el ratón mueve el joystick derecho [F8]",
+    "Teclado y ratón", "El ratón mira y apunta; mantén [Alt] para el cursor\nControles: [F1]", "Giro con dos dedos",
+    "Mantén el botón izquierdo y arrastra abajo / arriba", "Empuja los dos joysticks hacia fuera y gíralos", "Antialiasing FSR 3.1 activado",
+    "Antialiasing FSR 3.1 desactivado", "Cámara", "Lámpara encendida: la cámara de la Vita ve una luz intensa [F7]",
+    "Lámpara apagada: la cámara de la Vita ve una habitación oscura [F7]", "El juego usa la cámara de la Vita: la sustituye la cámara de tu ordenador\nPara cambiarla: [F1] > Controles", "El juego usa la cámara de la Vita: ve una lámpara encendida\n[F7] la apaga",
+    "El juego usa la cámara de la Vita: ve una habitación oscura\n[F7] enciende una lámpara", "El juego online necesita la actualización %s", "Esta copia del juego no es la versión del juego online. Añade la actualización %s en el launcher y vuelve a jugar.",
+    "Tocar la pantalla", "Listo", "Los juegos de Vita se juegan con la pantalla táctil además de los botones. Así se toca:",
+    "Teclado y ratón", "Mantén %s y haz clic para tocar la pantalla. Con el clic derecho tocas el panel trasero.", "Mando",
+    "Mantén %s y mueve el cursor con un joystick, luego pulsa %s para tocar. %s hace lo mismo en el panel trasero.%s", " El panel táctil también funciona.", "Pantalla táctil",
+    "Toca la imagen, como harías en la pantalla de la Vita.", "Pruébalo ahora para continuar.", "De vuelta al juego.",
+    "F1 abre el menú, con todos los controles. Esc omite esta pantalla.", "Creando shaders %d%%", "Preparando los shaders",
+    "Creando los shaders de %s para este ordenador, para jugar sin pausas. Ocurre una sola vez: los siguientes inicios son rápidos.", "%s de %s", "Calculando el tiempo restante",
+    "Queda menos de un minuto", "Queda aproximadamente 1 minuto", "Quedan unos %d minutos",
+    "Omitir", "Si omites, el juego empieza ahora. Puede que veas pausas breves hasta que los shaders estén listos: se siguen creando mientras juegas.",
+};
 
 // The game's languages: the names its text files have (find_game reads a copy's), what each is called, and the console's code for it that the game is told (RECOMP_LANGUAGE, apputil.c).
 struct GameLanguage { const char *code, *name, *console; };
 const GameLanguage kGameLanguages[] = {
-    {"en", "English (US)", "1"}, {"en-gb", "English (UK)", "18"}, {"fr", "FranÃ§" "ais", "2"}, {"de", "Deutsch", "4"},
-    {"it", "Italiano", "5"}, {"nl", "Nederlands", "6"}, {"es", "EspaÃ±ol", "3"},
+    {"en", "English (US)", "1"}, {"en-gb", "English (UK)", "18"}, {"fr", "Franç" "ais", "2"}, {"de", "Deutsch", "4"},
+    {"it", "Italiano", "5"}, {"nl", "Nederlands", "6"}, {"es", "Españ" "ol", "3"},
 };
 
 // The one played from a copy's (codes): the setting when the copy has it, else Windows' language when it has that,
@@ -585,9 +728,10 @@ public:
     bool rebind_event(const SDL_Event& event);
     bool take_resume() { return std::exchange(resume_, false); }
     bool take_leave() { return std::exchange(leave_, false); }
+    bool take_exit() { return std::exchange(exit_, false); }
 
 private:
-    enum class Page { kPlay, kSettings, kControls, kAbout, kQuit };
+    enum class Page { kPlay, kSettings, kControls, kAbout, kQuit, kExit };   // (kExit: the game's menu, started by the launcher: quit both)
 
     bool start();
     void stop();
@@ -681,6 +825,9 @@ private:
     const bool in_game_;
     void (*apply_)(const char* key) = nullptr;
     bool resume_ = false, leave_ = false;   // the game's menu: Resume, Back to the launcher (or Quit)
+    bool exit_ = false;                     // the game's menu: Quit the game, the launcher too
+    bool start_armed_ = false;   // the game's menu: Start resumes once the Start that opened it (Select+Start) is let go
+    float opened_at_ = 0;        // (when it opened: the pad reaches ImGui a frame late, so a held Start first shows as a press)
 
     SDL_Window* window_ = nullptr;
     SDL_GPUDevice* device_ = nullptr;
@@ -1298,7 +1445,7 @@ void Launcher::start_game() {
         startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     }
     PROCESS_INFORMATION process = {};
-    const bool started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, log != INVALID_HANDLE_VALUE, 0, nullptr, game_directory_.c_str(), &startup, &process);
+    const bool started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, log != INVALID_HANDLE_VALUE, CREATE_NO_WINDOW, nullptr, game_directory_.c_str(), &startup, &process);
     if (log != INVALID_HANDLE_VALUE) CloseHandle(log);
     if (!started) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "abyssport", "abyss.exe did not start.", window_);
@@ -1306,8 +1453,14 @@ void Launcher::start_game() {
     }
     SDL_HideWindow(window_);
     WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD exit_code = 0;
+    GetExitCodeProcess(process.hProcess, &exit_code);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
+    if (exit_code == 3) {  // the player quit the game, not back to the launcher: it closes as well
+        done_ = true;
+        return;
+    }
     SDL_ShowWindow(window_);
     SDL_RaiseWindow(window_);
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
@@ -2578,7 +2731,7 @@ void Launcher::panel(float now) {
         case Page::kSettings: page_settings(); break;
         case Page::kControls: page_controls(); break;
         case Page::kAbout: page_about(); break;
-        case Page::kQuit: break;
+        case Page::kQuit: case Page::kExit: break;
     }
     ImGui::PopStyleVar();
     origin_.y -= item_shift_;
@@ -2691,7 +2844,7 @@ void Launcher::leave_page_on_left() {
 // right enters the page, Enter or the confirm button acts or enters.
 void Launcher::side_menu(float now, float since, const char* const* labels, const Page* targets, int count) {
     const bool ready = game_ready_ && program_ready_;
-    const auto action_only = [&](int i) { return targets[i] == Page::kQuit; };
+    const auto action_only = [&](int i) { return targets[i] == Page::kQuit || targets[i] == Page::kExit; };
     const auto select = [&](int i) {
         menu_cursor_ = i;
         if (!action_only(i) && page_ != targets[i]) {
@@ -2701,7 +2854,9 @@ void Launcher::side_menu(float now, float since, const char* const* labels, cons
         }
     };
     const auto act = [&](int i) {
-        if (in_game_ && targets[i] == Page::kQuit) {
+        if (in_game_ && targets[i] == Page::kExit) {
+            exit_ = true;
+        } else if (in_game_ && targets[i] == Page::kQuit) {
             leave_ = true;
         } else if (in_game_ && targets[i] == Page::kPlay) {
             resume_ = true;
@@ -2953,8 +3108,9 @@ void Launcher::open_in_game() {
     menu_has_focus_ = true;
     focus_panel_ = false;
     rebinding_ = -1;
-    resume_ = leave_ = false;
-    start_time_ = page_since_ = static_cast<float>(ImGui::GetTime());
+    resume_ = leave_ = exit_ = false;
+    start_armed_ = false;
+    start_time_ = page_since_ = opened_at_ = static_cast<float>(ImGui::GetTime());
     // For scripts (the overlay's headless dump), as the launcher's shots: ABYSS_LAUNCHER_PAGE=1..2, ABYSS_LAUNCHER_TAB=n.
     if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) menu_cursor_ = static_cast<int>(page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 2)));
     if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);
@@ -3002,9 +3158,11 @@ void Launcher::frame_in_game(int width, int height) {
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
     list_ = ImGui::GetWindowDrawList();
     header(since * 2);  // the launcher's entrance, twice as quick
-    const char* labels[] = {t.resume, t.settings, t.controls, std::getenv("ABYSS_LAUNCHER") ? t.back_launcher : t.quit_game};
-    const Page targets[] = {Page::kPlay, Page::kSettings, Page::kControls, Page::kQuit};
-    side_menu(now, since * 2, labels, targets, 4);
+    // started by the launcher: back to it, or quit the game and the launcher both; started alone: quit
+    const bool launched = std::getenv("ABYSS_LAUNCHER") != nullptr;
+    const char* labels[] = {t.resume, t.settings, t.controls, launched ? t.back_launcher : t.quit_game, t.quit_game};
+    const Page targets[] = {Page::kPlay, Page::kSettings, Page::kControls, Page::kQuit, Page::kExit};
+    side_menu(now, since * 2, labels, targets, launched ? 5 : 4);
     panel(now);
     bottom_bar(since * 2);
     g_alpha = 1;
@@ -3023,7 +3181,8 @@ void Launcher::frame_in_game(int width, int height) {
                 resume_ = true;
             }
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_GamepadStart)) resume_ = true;
+        if (!ImGui::IsKeyDown(ImGuiKey_GamepadStart) && ImGui::GetTime() - opened_at_ > 0.25) start_armed_ = true;
+        else if (start_armed_ && ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false)) resume_ = true;
     }
     leave_page_on_left();
 }
@@ -3188,9 +3347,15 @@ void launcher_game_open() {
 int launcher_game_frame(int width, int height) {
     if (!g_menu) return 1;
     g_menu->frame_in_game(width, height);
-    return g_menu->take_leave() ? 2 : g_menu->take_resume() ? 1 : 0;
+    return g_menu->take_exit() ? 3 : g_menu->take_leave() ? 2 : g_menu->take_resume() ? 1 : 0;
 }
 bool launcher_game_event(const SDL_Event* event) {
     return g_menu && g_menu->rebind_event(*event);
+}
+extern "C" const char* game_text(int id) {
+    if (id < 0 || id >= GT_COUNT) return "";
+    const std::string language = launcher_language();   // (each time: the menu's Settings can change it mid-run)
+    const char* const* table = language == "it" ? kGameTextsItalian : language == "pt" ? kGameTextsPortuguese : language == "es" ? kGameTextsSpanish : kGameTextsEnglish;
+    return table[id];
 }
 #endif

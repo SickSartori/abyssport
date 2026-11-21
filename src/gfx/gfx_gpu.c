@@ -31,6 +31,7 @@
 #include "rt.h"
 #include "keycap.h"   /* (the button glyphs on a keyboard and mouse) */
 #include "gfx.h"
+#include "../launcher/game_texts.h"
 #include "usse.h"
 #include "usse_spirv.h"
 #include "guestwatch.h"
@@ -2732,7 +2733,7 @@ void gfx_gpu_fsr_toggle(void) {
 	fsr_live = !fsr_on(); if (fsr_live) fsr_restart = 1;
 	if (!mv_was && mv_on() && mv_qframe < gpu_frame_no) mv_qframe = gpu_frame_no;
 	extern void overlay_toast(const char *msg, double seconds);
-	overlay_toast(fsr_live ? "FSR 3.1 anti-aliasing on" : "FSR 3.1 anti-aliasing off", 2.0);
+	overlay_toast(game_text(fsr_live ? GT_FSR_ON : GT_FSR_OFF), 2.0);
 	fprintf(stderr, "    fsr: %s (F4)\n", fsr_live ? "on" : "off");
 }
 static int mv_on(void) { static int env = -1; if (env < 0) env = getenv("RECOMP_MV") != 0; return env || fsr_on(); }

@@ -8,7 +8,8 @@
 void launcher_game_init(SDL_GPUDevice* device, void (*apply)(const char* key));
 // The menu opened: its first page, Resume selected.
 void launcher_game_open();
-// One frame of the menu, inside the overlay's ImGui frame: 0 still open, 1 Resume, 2 Back to the launcher (or Quit).
+// One frame of the menu, inside the overlay's ImGui frame: 0 still open, 1 Resume, 2 Back to the launcher (or Quit),
+// 3 Quit the game and the launcher that started it.
 int launcher_game_frame(int width, int height);
 // An event before ImGui sees it: true when taken (the key for an action being changed).
 bool launcher_game_event(const SDL_Event* event);
