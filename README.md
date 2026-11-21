@@ -30,6 +30,18 @@ The release carries its own source code in `source/` (GPL), and the licences of 
 What the game prints goes to `abyss.log` beside its files (`game\library\decrypted\PCSA00029\recomp`): attach it to a
 bug report.
 
+## Known issues
+
+- **Only the prologue has been played.** A new campaign starts and its first chapter plays; nothing past it has been
+  tried, so a later chapter may crash, stop or draw wrong. Reports with `abyss.log` are welcome.
+- **One release of the game only**: the US one, PCSA00029, version 1.00. Other regions and patched versions are
+  not supported.
+- **60 frames per second is experimental**: the game was made for 30, and at 60 some things may move or time wrong.
+- **The raw mouse look (F8) is experimental.**
+- **The in-game menu and the key prompts on a keyboard and mouse are new** and little tested.
+- **Windows only**, 64-bit. Linux and the Steam Deck have not been tried.
+- **The first start takes about 15 minutes and 9 GB**: the game's code is compiled on your PC, once.
+
 ## Building
 
 abyssport is built on Windows. You need Python 3.11 or later and CMake 3.25 or later; the compiler is fetched for you.
