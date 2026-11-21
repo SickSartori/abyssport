@@ -19,6 +19,14 @@
   software and GPU renderers (through SDL3) with the shader translator, audio (NGS, ATRAC9), films (H.264 through
   FFmpeg's DLLs), touch, motion and controllers, the window, the in-game menu, and the patches for Golden Abyss
   (field of view, wider aspect ratios, 60 fps, mouse look, view distance).
+- The in-game menu (F1, or a controller's PS / Xbox button) is the launcher's own pages over the paused game: Resume,
+  Settings, Controls, and Back to the launcher. The internal resolution, full screen and the performance display
+  apply at once, the keys when the menu closes; Esc goes back a step at a time. The game's cards and notes (quitting, the
+  controller layout, shader preparation, the touch card) have the launcher's look.
+- On a keyboard and mouse the game's button prompts show the key or mouse button that plays each action, as set on
+  the Controls page (Space, Shift, the mouse's right button...); a controller brings the console's symbols back. When
+  the game waits for a touch, a note says how to give it with the device in use.
+- Cover, roll and drop are on Left Shift, as in Uncharted on PC.
 - The launcher (`abyssport.exe`): whether the game is ready; the Original,
   Enhanced and Custom styles; picture, effects, game and audio settings; the keyboard's keys and the mouse's five
   buttons, each on any action; and "How to play", a tutorial for keyboard and mouse, a DualSense or an Xbox

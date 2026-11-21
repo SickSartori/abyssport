@@ -238,7 +238,7 @@ static __thread uint64_t vb_last_target;    /* the edge this thread last waited 
  * the fixed guest clock still too; on the real clock display_set_paused (above) does the same. A
  * plain sleep-poll, no lock: the window thread that flips the flag must never wait on anything this
  * thread holds. */
-static int overlay_paused(void) { extern int overlay_game_paused(void); return overlay_game_paused(); }   /* the menu open, or the menu bar's Game > Pause (overlay.h) */
+static int overlay_paused(void) { extern int overlay_game_paused(void); return overlay_game_paused(); }   /* the menu or a card open, or the touch card (overlay.h) */
 /* The sleep to an edge. One usleep to the exact time wakes late by a fixed share of the sleep on macOS
  * -- the kernel's timer leeway for an ordinary thread is about half of what was asked: usleep(1000)
  * returns after 1.5 ms, usleep(5000) after 7.2, usleep(15000) after 20 (measured here; a SCHED_RR or

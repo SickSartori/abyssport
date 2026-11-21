@@ -11,9 +11,14 @@
 // presses Play by itself and quits when the game ends. ABYSS_LAUNCHER_PREPARE=<copy>|<PUP> (a release) chooses the
 // two, presses Prepare, and quits when it ends: exit code 0 when the game is then ready. ABYSS_LAUNCHER_LANGUAGE=
 // en|it|pt|es speaks that language. ABYSS_LAUNCHER_PLAY=1 (RecompLauncher) presses Play once the game is ready.
+//
+// The same pages are the game's menu (F1): built into the runtime with ABYSS_LAUNCHER_IN_GAME, drawn by
+// src/ui/overlay.cpp over the paused game (launcher_game.h), as mc3port's launcher is its in-game menu.
 
 #include <SDL3/SDL.h>
+#ifndef ABYSS_LAUNCHER_IN_GAME
 #include <SDL3/SDL_main.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -22,10 +27,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #define NOMINMAX
@@ -37,12 +44,17 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#ifndef ABYSS_LAUNCHER_IN_GAME
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #include "third_party/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "third_party/stb/stb_image_write.h"
+#else
+#include "third_party/stb/stb_image.h"   // the runtime's (src/media/jpeg.c): PNG and JPEG, from memory only
+#include "launcher_game.h"
+#endif
 
 extern "C" {
 #include "settings.h"
@@ -91,6 +103,9 @@ struct Texts {
     const char *copy, *copy_none, *pup, *pup_none, *choose, *prepare, *cancel, *failed, *space, *duration, *compile_only;
     const char *steps[7];
     const char *enter;  // the key's name in the hints
+    // the game's menu (F1): the launcher's pages over the paused game
+    const char *resume, *paused_title, *paused_lead, *back_launcher, *quit_game;
+    const char *osd, *osd_detail, *osd_names[3], *layout, *layout_detail, *layout_names[3];
 };
 
 const Texts kItalian = {
@@ -171,6 +186,10 @@ const Texts kItalian = {
     {"Decrittazione del firmware", "Decrittazione del gioco", "Controllo della versione 1.00", "Analisi del codice",
      "Codice ARM in C", "Compilazione", "Collegamento"},
     "Invio",
+    "RIPRENDI", "IN PAUSA", "Il gioco ti aspetta. Le impostazioni cambiano subito.", "TORNA AL LAUNCHER", "ESCI DAL GIOCO",
+    "Prestazioni a schermo", "Fotogrammi al secondo e tempi sopra il gioco (anche F10)", {"No", "Essenziali", "Complete"},
+    "Schema dei comandi", "Come si fanno le azioni del touch: come sulla console portatile, o lo schema della PS TV, solo tasti. Dal prossimo avvio",
+    {"Chiedi", "Standard", "PS TV"},
 };
 
 const Texts kEnglish = {
@@ -251,6 +270,10 @@ const Texts kEnglish = {
     {"Decrypting the firmware", "Decrypting the game", "Checking version 1.00", "Analysing the code",
      "ARM code to C", "Compiling", "Linking"},
     "Enter",
+    "RESUME", "PAUSED", "The game waits for you. Settings change at once.", "BACK TO THE LAUNCHER", "QUIT THE GAME",
+    "Performance display", "Frames per second and frame times over the game (F10 too)", {"Off", "Basic", "Full"},
+    "Controller layout", "How the touch screen's actions are done: as on the handheld, or the PS TV's own layout, buttons only. Next start",
+    {"Ask", "Standard", "PS TV"},
 };
 
 std::string setting(const char* key, const char* def) {
@@ -336,6 +359,10 @@ const Texts kPortuguese = {
     {"Descriptografando o firmware", "Descriptografando o jogo", "Verificando a versão 1.00", "Analisando o código",
      "Código ARM em C", "Compilando", "Vinculando"},
     "Enter",
+    "CONTINUAR", "PAUSADO", "O jogo espera por você. As configurações mudam na hora.", "VOLTAR AO LAUNCHER", "SAIR DO JOGO",
+    "Desempenho na tela", "Quadros por segundo e tempos sobre o jogo (também F10)", {"Não", "Básico", "Completo"},
+    "Layout dos comandos", "Como as ações de toque são feitas: como no portátil, ou o layout do PS TV, só botões. No próximo início",
+    {"Perguntar", "Padrão", "PS TV"},
 };
 
 const Texts kSpanish = {
@@ -416,6 +443,10 @@ const Texts kSpanish = {
     {"Descifrando el firmware", "Descifrando el juego", "Comprobando la versión 1.00", "Analizando el código",
      "Código ARM a C", "Compilando", "Enlazando"},
     "Intro",
+    "CONTINUAR", "EN PAUSA", "El juego te espera. Los ajustes cambian al momento.", "VOLVER AL LAUNCHER", "SALIR DEL JUEGO",
+    "Rendimiento en pantalla", "Fotogramas por segundo y tiempos sobre el juego (también F10)", {"No", "Básico", "Completo"},
+    "Esquema de los controles", "Cómo se hacen las acciones táctiles: como en la portátil, o el esquema de PS TV, solo botones. Al próximo inicio",
+    {"Preguntar", "Estándar", "PS TV"},
 };
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
@@ -477,7 +508,7 @@ struct Bind {
 };
 constexpr Bind kBinds[16] = {
     {"bind_move_up", "W", "LS"},   {"bind_move_down", "S", "LS"}, {"bind_move_left", "A", "LS"}, {"bind_move_right", "D", "LS"},
-    {"bind_cross", "Space", "X"},  {"bind_circle", "C", "O"},     {"bind_square", "F", "S"},     {"bind_triangle", "E", "T"},
+    {"bind_cross", "Space", "X"},  {"bind_circle", "Left Shift", "O"}, {"bind_square", "F", "S"},     {"bind_triangle", "E", "T"},
     {"bind_l", "Q", "L"},          {"bind_r", "R", "R"},          {"bind_start", "Return", "ST"}, {"bind_select", "Tab", "SE"},
     {"bind_up", "Up", "DU"},       {"bind_down", "Down", "DD"},   {"bind_left", "Left", "DL"},   {"bind_right", "Right", "DR"},
 };
@@ -506,6 +537,16 @@ struct Trail {
 class Launcher {
 public:
     int run();
+
+    // The game's menu (launcher_game.h): the same pages over the paused game, in the overlay's ImGui frame and on its
+    // GPU device. `apply`: a setting the game takes at once when told (the resolution, full screen, the stats).
+    explicit Launcher(bool in_game = false) : in_game_(in_game) {}
+    void init_in_game(SDL_GPUDevice* device, void (*apply)(const char* key));
+    void open_in_game();
+    void frame_in_game(int width, int height);
+    bool rebind_event(const SDL_Event& event);
+    bool take_resume() { return std::exchange(resume_, false); }
+    bool take_leave() { return std::exchange(leave_, false); }
 
 private:
     enum class Page { kPlay, kSettings, kControls, kAbout, kQuit };
@@ -580,6 +621,7 @@ private:
     bool value_slider(const char* id, float* value, float minimum, float maximum, const char* format, float font_size);
 
     void page_play();
+    void page_paused();   // the game's menu: in place of Play
     void page_settings();
     void page_controls();
     void page_about();
@@ -592,6 +634,15 @@ private:
     void choice(const char* key, const char* def, const char* const* values, const char* const* labels, int count,
                 const char* const* details = nullptr, float wide = 0);
     void number(const char* key, float def, float minimum, float maximum, const char* format);
+
+    // A setting just changed: the game is told about the ones it takes at once (in_game_).
+    void changed(const char* key) {
+        if (in_game_ && apply_) apply_(key);
+    }
+
+    const bool in_game_;
+    void (*apply_)(const char* key) = nullptr;
+    bool resume_ = false, leave_ = false;   // the game's menu: Resume, Back to the launcher (or Quit)
 
     SDL_Window* window_ = nullptr;
     SDL_GPUDevice* device_ = nullptr;
@@ -808,25 +859,33 @@ SDL_GPUTexture* Launcher::make_texture(const unsigned char* rgba, int width, int
 // small and averaged, the GPU's filter does the rest) and sce_sys/livearea/contents/startup.png (its logo). Until
 // there is a copy, one of abyssport's own pictures (art/bg_*.jpg), chosen at random. The
 // emblem beside the port's name is always ours.
+// A picture as RGBA, the file read whole first: the runtime's stb decodes from memory only (in the game's menu).
+unsigned char* load_rgba(const fs::path& file, int* w, int* h) {
+    std::ifstream in(file, std::ios::binary);
+    const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    int n = 0;
+    return bytes.empty() ? nullptr : stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()), static_cast<int>(bytes.size()), w, h, &n, 4);
+}
+
 void Launcher::load_art() {
-    int w = 0, h = 0, n = 0;
+    int w = 0, h = 0;
     if (!emblem_) {
-        if (unsigned char* emblem = stbi_load((exe_directory_ / "art" / "emblem.png").string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* emblem = load_rgba(exe_directory_ / "art" / "emblem.png", &w, &h)) {
             emblem_ = make_texture(emblem, w, h);
             stbi_image_free(emblem);
         }
-        if (unsigned char* art = stbi_load((exe_directory_ / "art" / "pad.png").string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* art = load_rgba(exe_directory_ / "art" / "pad.png", &w, &h)) {
             pad_art_ = make_texture(art, w, h);
             stbi_image_free(art);
         }
-        if (unsigned char* art = stbi_load((exe_directory_ / "art" / "pad_bumpers.png").string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* art = load_rgba(exe_directory_ / "art" / "pad_bumpers.png", &w, &h)) {
             pad_bumpers_ = make_texture(art, w, h);
             stbi_image_free(art);
         }
     }
     const auto own_background = [&] {
         static const char* const kOwn[] = {"bg_temple.jpg", "bg_chasm.jpg", "bg_cave.jpg", "bg_ruins.jpg"};
-        if (unsigned char* picture = stbi_load((exe_directory_ / "art" / kOwn[std::rand() % 4]).string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* picture = load_rgba(exe_directory_ / "art" / kOwn[std::rand() % 4], &w, &h)) {
             background_ = make_texture(picture, w, h);
             background_width_ = w;
             background_height_ = h;
@@ -838,7 +897,8 @@ void Launcher::load_art() {
         return;
     }
     const fs::path sys = game_directory_ / "fs" / "app0" / "sce_sys";
-    if (unsigned char* picture = stbi_load((sys / "pic0.png").string().c_str(), &w, &h, &n, 4)) {
+    unsigned char* picture = in_game_ ? nullptr : load_rgba(sys / "pic0.png", &w, &h);   // (in the game: the game is the background)
+    if (picture) {
         if (background_) SDL_ReleaseGPUTexture(device_, background_);
         background_is_game_ = true;
         const int sw = 96, sh = std::max(1, 96 * h / std::max(1, w));
@@ -882,13 +942,13 @@ void Launcher::load_art() {
         background_height_ = h;
         stbi_image_free(picture);
     }
-    if (unsigned char* logo = stbi_load((sys / "livearea" / "contents" / "startup.png").string().c_str(), &w, &h, &n, 4)) {
+    if (unsigned char* logo = load_rgba(sys / "livearea" / "contents" / "startup.png", &w, &h)) {
         logo_ = make_texture(logo, w, h);
         logo_width_ = w;
         logo_height_ = h;
         stbi_image_free(logo);
     }
-    if (!background_) own_background();  // a copy without its picture: one of ours, as before there is a copy
+    if (!background_ && !in_game_) own_background();  // a copy without its picture: one of ours, as before there is a copy
 }
 
 // Where the game is: ABYSS_GAME_DIR, the build tree's game/library (the launcher runs from build/<preset>), or the
@@ -1159,7 +1219,8 @@ void Launcher::start_game() {
     SetEnvironmentVariableA("RECOMP_GAME_NAME", "Uncharted: Golden Abyss");
     SetEnvironmentVariableA("RECOMP_FS", "fs");
     SetEnvironmentVariableA("RECOMP_LOG", "0");
-    SetEnvironmentVariableA("ABYSS_LAUNCHER", "1");  // the in-game menu's Quit reads "Back to the launcher" (overlay.cpp)
+    SetEnvironmentVariableA("ABYSS_LAUNCHER", "1");  // the in-game menu's Quit reads "Back to the launcher"
+    SetEnvironmentVariableW(L"ABYSS_LAUNCHER_DIR", exe_directory_.c_str());  // where the menu finds its letters and pictures
     std::error_code error;
     for (const fs::path& recipes : {exe_directory_ / "shaders.txt", exe_directory_ / ".." / ".." / "res" / "shaders.txt"}) {
         if (fs::exists(recipes, error)) {
@@ -1571,6 +1632,7 @@ void Launcher::choice(const char* key, const char* def, const char* const* value
     if (segmented(key, labels, count, &current, details, wide)) {
         settings_set_str(key, values[current]);
         settings_save();
+        changed(key);
     }
 }
 
@@ -1580,6 +1642,7 @@ void Launcher::number(const char* key, float def, float minimum, float maximum, 
     if (slider(id.c_str(), &value, minimum, maximum, format)) {
         settings_set_float(key, std::round(value * 100) / 100);
         settings_save();
+        changed(key);
     }
 }
 
@@ -1587,7 +1650,8 @@ void Launcher::number(const char* key, float def, float minimum, float maximum, 
 std::string Launcher::auto_scale() const {
     int lines = 1080;
     SDL_Rect bounds;
-    if (const SDL_DisplayID display = SDL_GetDisplayForWindow(window_); display && SDL_GetDisplayBounds(display, &bounds)) lines = bounds.h;
+    const SDL_DisplayID display = window_ ? SDL_GetDisplayForWindow(window_) : SDL_GetPrimaryDisplay();
+    if (display && SDL_GetDisplayBounds(display, &bounds)) lines = bounds.h;
     return std::to_string(std::clamp(static_cast<int>(std::ceil(lines / 544.0 - 0.05)), 1, 6));
 }
 
@@ -1616,6 +1680,9 @@ void Launcher::apply_style(int chosen) {
         }
     }
     settings_save();
+    if (chosen != kStyleCustom) {
+        for (const StyleValue& value : kStyleValues) changed(value.key);
+    }
 }
 
 void Launcher::style_row() {
@@ -1674,6 +1741,7 @@ void Launcher::page_settings() {
         if (combo("##render_scale", scale_labels, 6, &scale)) {
             settings_set_str("render_scale", scale_values[scale]);
             settings_save();
+            changed("render_scale");
         }
         const char* rate_values[] = {"30", "60"};
         row(t.frame_rate, t.frame_rate_detail);
@@ -1699,6 +1767,9 @@ void Launcher::page_settings() {
         number("fov", 1.0f, 0.8f, 1.5f, "%.2f");
         row(t.view_distance, t.view_distance_detail);
         number("view_distance", 1.0f, 1.0f, 3.0f, "%.2f");
+        const char* osd_values[] = {"0", "1", "2"};
+        row(t.osd, t.osd_detail, 330);
+        choice("osd", "0", osd_values, t.osd_names, 3, nullptr, 330);
         const char* language_values[] = {"auto", "it", "en", "pt", "es"};
         row(t.language, nullptr, 420);
         choice("launcher_language", "auto", language_values, t.language_names, 5, nullptr, 420);
@@ -1799,6 +1870,9 @@ void Launcher::page_controls() {
         choice("shoulder_buttons", "triggers", shoulder_values, t.shoulder_names, 2);
         row(t.gyro, t.gyro_detail);
         choice("gyro", "1", off_on, no_yes, 2);
+        const char* layout_values[] = {"0", "1", "2"};
+        row(t.layout, t.layout_detail, 400);
+        choice("controller_layout", "0", layout_values, t.layout_names, 3, nullptr, 400);
     } else {
         how_page(static_cast<float>(ImGui::GetTime()));
     }
@@ -2420,7 +2494,7 @@ void Launcher::panel(float now) {
     ImGui::PushClipRect(ImVec2(panel_x, view_top_), ImVec2(panel_x + column_width, view_bottom_), true);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, g_alpha);
     switch (page_) {
-        case Page::kPlay: page_play(); break;
+        case Page::kPlay: in_game_ ? page_paused() : page_play(); break;
         case Page::kSettings: page_settings(); break;
         case Page::kControls: page_controls(); break;
         case Page::kAbout: page_about(); break;
@@ -2547,7 +2621,11 @@ void Launcher::side_menu(float now, float since, const char* const* labels, cons
         }
     };
     const auto act = [&](int i) {
-        if (targets[i] == Page::kQuit) {
+        if (in_game_ && targets[i] == Page::kQuit) {
+            leave_ = true;
+        } else if (in_game_ && targets[i] == Page::kPlay) {
+            resume_ = true;
+        } else if (targets[i] == Page::kQuit) {
             done_ = true;
         } else if (targets[i] == Page::kPlay && ready) {
             play_ = true;
@@ -2676,6 +2754,123 @@ void Launcher::bottom_bar(float since) {
     hint("\xE2\x86\x91\xE2\x86\x93\xE2\x86\x90\xE2\x86\x92", kChrome, t.move_hint);
 }
 
+// The key for the action being changed (Controls): the next one pressed; Escape keeps the one it had.
+bool Launcher::rebind_event(const SDL_Event& event) {
+    if (rebinding_ < 0 || event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return false;
+    if (event.key.key != SDLK_ESCAPE) {
+        const char* name = SDL_GetKeyName(event.key.key);
+        for (const Bind& bind : kBinds) {  // a key another action had is taken from it
+            if (setting(bind.key, bind.def) == name) settings_set_str(bind.key, "");
+        }
+        settings_set_str(kBinds[rebinding_].key, name);
+        settings_save();
+    }
+    rebinding_ = -1;
+    cancel_frame_ = ImGui::GetFrameCount() + 1;
+    return true;
+}
+
+// --- the game's menu (F1): the launcher's pages over the paused game ---
+
+void Launcher::init_in_game(SDL_GPUDevice* device, void (*apply)(const char* key)) {
+    device_ = device;
+    apply_ = apply;
+    // The launcher's folder (its letters and pictures): it says where when it starts the game; else beside the game's
+    // program (the build tree).
+    if (const wchar_t* dir = _wgetenv(L"ABYSS_LAUNCHER_DIR")) {
+        exe_directory_ = dir;
+    } else {
+        const char* base = SDL_GetBasePath();
+        exe_directory_ = base ? fs::path(base) : fs::current_path();
+    }
+    game_directory_ = fs::current_path();  // the game runs in its own folder
+    game_ready_ = program_ready_ = true;
+    load_fonts();
+    load_art();
+}
+
+void Launcher::open_in_game() {
+    page_ = Page::kPlay;
+    menu_cursor_ = 0;
+    menu_has_focus_ = true;
+    focus_panel_ = false;
+    rebinding_ = -1;
+    resume_ = leave_ = false;
+    start_time_ = page_since_ = static_cast<float>(ImGui::GetTime());
+    // For scripts (the overlay's headless dump), as the launcher's shots: ABYSS_LAUNCHER_PAGE=1..2, ABYSS_LAUNCHER_TAB=n.
+    if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) menu_cursor_ = static_cast<int>(page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 2)));
+    if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);
+}
+
+// In place of Play: the game paused, how it is set up, Resume at the foot.
+void Launcher::page_paused() {
+    const Texts& t = T();
+    title(t.paused_title);
+    lead(t.paused_lead);
+    status(pad_connected_, pad_connected_ ? t.pad_on : t.pad_off, pad_connected_ ? t.pad_on_detail : t.pad_off_detail, nullptr, "##pad");
+    const int current = style();
+    const std::string heading = std::string(t.style) + ": " + t.style_names[current];
+    if (status(true, heading.c_str(), t.style_details[current], t.change, "##style")) {
+        page_ = Page::kSettings;
+        menu_cursor_ = 1;
+        page_since_ = static_cast<float>(ImGui::GetTime());
+    }
+    cursor_ = std::max(cursor_, view_bottom_ - origin_.y - px(130));  // Resume at the foot of the column
+    if (big_button(t.resume, "##resume", false)) resume_ = true;
+}
+
+// mc3port's frame_in_game: the menu, the page and the bar over the game, darker under the menu.
+void Launcher::frame_in_game(int width, int height) {
+    const Texts& t = T();
+    width_ = width;
+    height_ = height;
+    scale_ = std::min(static_cast<float>(width_) / 1270.0f, static_cast<float>(height_) / 900.0f);
+    int count = 0;
+    if (SDL_JoystickID* pads = SDL_GetGamepads(&count)) SDL_free(pads);
+    pad_connected_ = count > 0;
+    configure_navigation();
+    const float now = static_cast<float>(ImGui::GetTime()), since = now - start_time_;
+    const ImVec2 screen(static_cast<float>(width_), static_cast<float>(height_));
+    const float dim = ease_out(since / 0.3f);
+    ImDrawList* back = ImGui::GetBackgroundDrawList();
+    back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(0, 0, 0, static_cast<int>(120 * dim)));
+    const ImU32 shade = IM_COL32(6, 4, 2, static_cast<int>(210 * dim)), clear = IM_COL32(6, 4, 2, 0);
+    back->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(screen.x * 0.55f, screen.y), shade, clear, clear, shade);
+
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(screen);
+    ImGui::Begin("##game_menu", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+    list_ = ImGui::GetWindowDrawList();
+    header(since * 2);  // the launcher's entrance, twice as quick
+    const char* labels[] = {t.resume, t.settings, t.controls, std::getenv("ABYSS_LAUNCHER") ? t.back_launcher : t.quit_game};
+    const Page targets[] = {Page::kPlay, Page::kSettings, Page::kControls, Page::kQuit};
+    side_menu(now, since * 2, labels, targets, 4);
+    panel(now);
+    bottom_bar(since * 2);
+    g_alpha = 1;
+    ImGui::End();
+
+    // Back: from the page to the menu, then to Resume's page, then to the game. Start resumes from anywhere.
+    if (rebinding_ < 0 && cancel_frame_ != ImGui::GetFrameCount()) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight)) {
+            if (!menu_has_focus_) {
+                back_to_menu();
+            } else if (page_ != Page::kPlay) {
+                page_ = Page::kPlay;
+                menu_cursor_ = 0;
+                page_since_ = now;
+            } else {
+                resume_ = true;
+            }
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_GamepadStart)) resume_ = true;
+    }
+    leave_page_on_left();
+}
+
+#ifndef ABYSS_LAUNCHER_IN_GAME
 // The window's picture into a PNG (ABYSS_LAUNCHER_SHOT): read back from the texture the frame was drawn into.
 bool Launcher::save_shot(SDL_GPUTexture* texture, SDL_GPUTextureFormat format, const char* path) {
     const Uint32 size = static_cast<Uint32>(width_ * height_ * 4);
@@ -2734,19 +2929,7 @@ int Launcher::run() {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) done_ = true;
-            if (rebinding_ >= 0 && event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {  // the key for the action being changed
-                if (event.key.key != SDLK_ESCAPE) {
-                    const char* name = SDL_GetKeyName(event.key.key);
-                    for (const Bind& bind : kBinds) {  // a key another action had is taken from it
-                        if (setting(bind.key, bind.def) == name) settings_set_str(bind.key, "");
-                    }
-                    settings_set_str(kBinds[rebinding_].key, name);
-                    settings_save();
-                }
-                rebinding_ = -1;
-                cancel_frame_ = ImGui::GetFrameCount() + 1;
-                continue;
-            }
+            if (rebind_event(event)) continue;
             if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F11) {
                 SDL_SetWindowFullscreen(window_, !(SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN));
             }
@@ -2821,9 +3004,35 @@ int Launcher::run() {
     return prepare_auto_ && !(game_ready_ && program_ready_) ? 1 : 0;
 }
 
+#endif  // ABYSS_LAUNCHER_IN_GAME
+
 }  // namespace
 
+#ifndef ABYSS_LAUNCHER_IN_GAME
 int main(int, char**) {
     Launcher launcher;
     return launcher.run();
 }
+#else
+// The game's menu (launcher_game.h).
+namespace {
+Launcher* g_menu = nullptr;
+}
+
+void launcher_game_init(SDL_GPUDevice* device, void (*apply)(const char* key)) {
+    if (g_menu) return;
+    g_menu = new Launcher(true);  // (kept for the whole run, as the overlay's ImGui context is)
+    g_menu->init_in_game(device, apply);
+}
+void launcher_game_open() {
+    if (g_menu) g_menu->open_in_game();
+}
+int launcher_game_frame(int width, int height) {
+    if (!g_menu) return 1;
+    g_menu->frame_in_game(width, height);
+    return g_menu->take_leave() ? 2 : g_menu->take_resume() ? 1 : 0;
+}
+bool launcher_game_event(const SDL_Event* event) {
+    return g_menu && g_menu->rebind_event(*event);
+}
+#endif

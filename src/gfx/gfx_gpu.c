@@ -29,6 +29,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "rt.h"
+#include "keycap.h"   /* (the button glyphs on a keyboard and mouse) */
 #include "gfx.h"
 #include "usse.h"
 #include "usse_spirv.h"
@@ -1030,6 +1031,7 @@ typedef struct { uint32_t addr, format, width, height; int layout; int stale, bc
 	 * re-hashes every page (and closes them again); nchk: re-checks in frame chk_frame */
 	uint32_t span, wclock, nph; uint64_t *ph; int hot, streak, calm, full, nchk; uint64_t big_frame, chk_frame;
 	uint64_t chash; int levels; uint64_t bytes;
+	int glyph; unsigned glyph_gen;   /* one of the game's button glyphs (glyph_of: its row + 1), and the keys it was drawn for */
 	uint8_t sx, sy; } TexEntry;   /* sx, sy: a view's texels a guest pixel (its source's scale: target_scale) */   /* chash/levels: the uploaded bytes' hash over the whole span and its mip count (get_texture: a texture that moved) */   /* samp[min][mag][addrmode_u][addrmode_v]; layout: GfxTexture's (3 = cube: a 6-layer cube texture) */
 /* The texture table: up to MAXTEX entries and tex_budget() bytes of GPU textures (an estimate per entry, TexEntry.bytes), the
  * least recently used one replaced past either. It was a fixed 512 entries: a Killzone area that samples more than that a
@@ -1280,6 +1282,35 @@ static void tring_end(SDL_GPUCommandBuffer *cmd, uint32_t lo, uint32_t hi) {   /
 	if (ntring_use == NTRING_USE) { SDL_WaitForGPUFences(gpu(), true, &tring_use[0].f, 1); SDL_ReleaseGPUFence(gpu(), tring_use[0].f); memmove(tring_use, tring_use + 1, sizeof tring_use[0] * (size_t)--ntring_use); }
 	tring_use[ntring_use++] = (TringUse){ f, lo, hi, tring_lap };
 }
+/* ---- Uncharted's button glyphs (game/ui/textures/helpers_*.bstex in gamedata.bin), known by their bytes' hash as uploaded
+ * (hash_bytes over the texture's span) and size: on a keyboard and mouse each is drawn as the key or mouse button that
+ * plays it (window.c window_glyph, keycap.c), with the console's own back once a controller is in use. The hashes come
+ * from the game's files (their key in the archive is the bitwise-not CRC-32 of the lower-case path); another game's
+ * textures never match. */
+static const struct { uint64_t hash; uint16_t w, h; const char *action; } glyph_table[] = {
+	{0x09f49a571b9f9528ull, 64, 64, "cross"}, {0xdb233db085840984ull, 64, 64, "circle"}, {0x6d1a64f5412f8db5ull, 64, 64, "square"},
+	{0x736a072a257fa661ull, 64, 64, "triangle"}, {0x3dcfb63266b4be43ull, 64, 64, "start"}, {0xcbf78a4ee39acbd6ull, 128, 64, "select"},
+	{0x2de10dc2443b82dfull, 128, 64, "l"}, {0xd1b729ce6680e8d9ull, 128, 64, "r"},
+	{0xe7d0cc8c00bf0a42ull, 128, 128, "up"}, {0x601ebc60e0238d2dull, 128, 128, "down"}, {0x5301cd96196231e3ull, 128, 128, "left"},
+	{0x2bcd61d30dd6d492ull, 128, 128, "right"}, {0x53167abe898f435dull, 93, 62, "lstick"}, {0xb5f054efdcda6b89ull, 93, 62, "rstick"},
+};
+unsigned window_glyph_generation(void); int window_glyph_keys(void); int window_glyph(const char *action, char *label, int n);
+static uint64_t glyph_test(void) {   /* RECOMP_GLYPH_TEST=<content hash>: that texture drawn as the cross glyph's key, keys on -- the drawing seen without reaching a prompt */
+	static int done; static uint64_t h; if (!done) { done = 1; const char *e = getenv("RECOMP_GLYPH_TEST"); h = e ? strtoull(e, 0, 16) : 0; }
+	return h;
+}
+static int glyph_of(uint64_t chash, const GfxTexture *t) {
+	if (glyph_test() && chash == glyph_test()) return 1;
+	for (int i = 0; i < (int)(sizeof glyph_table / sizeof glyph_table[0]); i++)
+		if (glyph_table[i].hash == chash && glyph_table[i].w == t->width && glyph_table[i].h == t->height) return i + 1;
+	return 0;
+}
+static void glyph_draw(const TexEntry *e, uint8_t *rgba, uint32_t w, uint32_t h) {   /* the decoded level 0 replaced by the key's picture */
+	char label[32]; const int mouse = window_glyph(glyph_table[e->glyph - 1].action, label, sizeof label);
+	uint8_t *img = malloc((size_t)w * h * 4);
+	if (img && keycap_draw(label, mouse, (int)w, (int)h, img)) memcpy(rgba, img, (size_t)w * h * 4);
+	free(img);
+}
 static void upload_texture(TexEntry *e, const GfxTexture *t) {
 	int cube = ((t->u_mode >> 4) & 3) == 3, levels = cube ? gfx_texture_cube_levels(t) : gfx_texture_levels(t), layers = cube ? 6 : 1;
 	e->chash = hash_bytes(G(t->data), e->span); e->levels = levels;   /* what the GPU texture holds (~10 us for 256 KB) */
@@ -1287,7 +1318,24 @@ static void upload_texture(TexEntry *e, const GfxTexture *t) {
 	batch_retire(e->tex, "texture re-upload");   /* its own command buffer runs before the pending draws that sampled the old content */
 	e->layout = (t->u_mode >> 4) & 3;
 	n_tex_uploads++;
-	SDL_GPUTextureFormat bc = tex_bc_format(t, cube);
+	e->glyph = glyph_of(e->chash, t); e->glyph_gen = window_glyph_generation();
+	const int keys = e->glyph && (window_glyph_keys() || glyph_test());
+	if (e->glyph && e->tex && e->bc) { batch_retire(e->tex, "texture re-upload"); SDL_ReleaseGPUTexture(gpu(), e->tex); e->tex = 0; e->bc = 0; }   /* (a glyph goes up decoded: RGBA, to be drawn over) */
+	{	/* RECOMP_GPU_DUMP_TEX_DIR=dir: every small 2D texture's level 0 the first time its content goes up, RGBA8, as
+		 * dir/<content hash>_<w>x<h>.rgba -- to find a texture by eye (the game's button glyphs) and name it by its hash */
+		static const char *dir = (const char *)-1; if (dir == (const char *)-1) dir = getenv("RECOMP_GPU_DUMP_TEX_DIR");
+		if (dir && !cube && t->width <= 256 && t->height <= 256) {
+			char path[1024]; snprintf(path, sizeof path, "%s/%016llx_%ux%u.rgba", dir, (unsigned long long)e->chash, t->width, t->height);
+			FILE *o = fopen(path, "rb");
+			if (o) fclose(o);
+			else if ((o = fopen(path, "wb"))) {
+				GfxTexture lv; gfx_texture_level(t, 0, &lv);
+				uint8_t *rgba = malloc(4u * lv.width * lv.height); gfx_decode_texture_rgba8(&lv, rgba);
+				fwrite(rgba, 4, (size_t)lv.width * lv.height, o); fclose(o); free(rgba);
+			}
+		}
+	}
+	SDL_GPUTextureFormat bc = e->glyph ? SDL_GPU_TEXTUREFORMAT_INVALID : tex_bc_format(t, cube);
 	if (bc != SDL_GPU_TEXTUREFORMAT_INVALID) {
 		/* the cache re-uploads in place only for the same address/format/size, which makes the same
 		 * decision -- unless creating the BC object failed the first time and the entry went RGBA */
@@ -1327,6 +1375,7 @@ decode:
 				GfxTexture lv; if (cube) gfx_texture_face_level(t, f, l, &lv); else gfx_texture_level(t, l, &lv);
 				uint64_t td0 = us_now();
 				if (wide) gfx_decode_texture_f32(&lv, (float *)(map + off)); else gfx_decode_texture_rgba8(&lv, map + off);
+				if (keys && l == 0 && f == 0 && !wide) glyph_draw(e, map + off, lv.width, lv.height);
 				t_up_decode += us_now() - td0;
 				{	static const char *dt = 0; static int dti = 0; if (!dti) { dti = 1; dt = getenv("RECOMP_GPU_DUMP_TEX"); }   /* (as the path below: level 0 as the GPU receives it) */
 					const char *path = dt ? strchr(dt, ':') : 0;
@@ -1356,6 +1405,7 @@ decode:
 		GfxTexture lv; if (cube) gfx_texture_face_level(t, f, l, &lv); else gfx_texture_level(t, l, &lv);
 		uint64_t td0 = us_now();
 		if (wide) gfx_decode_texture_f32(&lv, (float *)rgba); else gfx_decode_texture_rgba8(&lv, rgba);
+		if (keys && l == 0 && f == 0 && !wide) glyph_draw(e, rgba, lv.width, lv.height);
 		t_up_decode += us_now() - td0;
 		{	/* RECOMP_GPU_DUMP_TEX=hexaddr:path: that texture's level 0 as the GPU receives it (RGBA floats when wide, RGBA8 otherwise) -- gfxreplay's RECOMP_REPLAY_TEX writes the software sampler's view of the same texture, for a byte-level comparison */
 			static const char *dt = 0; static int dti = 0; if (!dti) { dti = 1; dt = getenv("RECOMP_GPU_DUMP_TEX"); }
@@ -1466,6 +1516,7 @@ static TexEntry *get_texture(const GfxTexture *t) {
 		 * its later binds that frame use what was uploaded, and the stamps left open bring the first
 		 * bind of the next frame back here (the once-a-frame guarantee) */
 		if (!fresh && watch && !e->hot && !tex_verify() && e->chk_frame == gpu_frame_no + 1 && e->nchk >= 4) { fresh = 1; n_tex_deferred++; }
+		if (fresh && e->glyph && e->glyph_gen != window_glyph_generation()) fresh = 0, e->full = 1;   /* a button glyph whose keys changed: drawn again (below) */
 		if (fresh) { e->used = ++tex_clock; t_texhash += us_now() - th0; return e; }
 	}
 	uint32_t span = tex_span(t);
@@ -1486,7 +1537,7 @@ static TexEntry *get_texture(const GfxTexture *t) {
 		/* unchanged: written with the same bytes, or only the other data sharing its first/last
 		 * page; `stale` likewise only forces this check -- a static render target viewed as a
 		 * texture every frame was re-decoded and re-uploaded every frame */
-		if (!changed) { e->stale = 0; return e; }
+		if (!changed && !(e->glyph && e->glyph_gen != window_glyph_generation())) { e->stale = 0; return e; }
 		if (trace_sync()) fprintf(stderr, "gpu trace: texture %#x fmt %#x %ux%u u%#x re-uploaded: %s (%u of %u pages)\n", t->data, t->format, t->width, t->height, t->u_mode, e->stale ? "a target came down over it and its bytes changed" : "its bytes changed", changed, e->nph);
 		e->stale = 0; n_tex_changed++;
 		uint64_t tu0 = us_now(); upload_texture(e, t); tex_account(e); t_texup += us_now() - tu0;
@@ -1659,7 +1710,6 @@ static void tscale_init(void) {
 		e += used; if (*e == ',') e++;
 	}
 }
-int gfx_gpu_target_scale_supported(void) { tscale_init(); return ntscale > 0; }   /* the game names targets to draw finer (the overlay's "Full-resolution world" row) */
 static void target_scale(uint32_t w, uint32_t h, uint8_t *sx, uint8_t *sy) {
 	tscale_init();
 	int x = rscale_x, y = rscale;
@@ -1718,7 +1768,6 @@ void gfx_gpu_render_scale_request(int n) {
 	__atomic_store_n(&rscale_req, n, __ATOMIC_RELAXED);
 }
 int gfx_gpu_render_scale(void) { return rscale; }
-int gfx_gpu_render_scale_wanted(void) { const int r = __atomic_load_n(&rscale_req, __ATOMIC_RELAXED); return r ? r : rscale; }   /* (the menus' pick: a request waits for the next scene, and the game is paused under the menu) */
 static uint16_t f2h(float f) {   /* round-to-nearest-even half, with the specials */
 	uint32_t b; memcpy(&b, &f, 4);
 	uint32_t s = (b >> 16) & 0x8000, e = (b >> 23) & 0xff, m = b & 0x7fffff;
@@ -2601,7 +2650,6 @@ hit:
  * holds nothing else after the composite); unset, none: a game whose 3D world draws straight into the display buffer would
  * have its world squeezed */
 static int hud_draws(void) { static int v = -1; if (v < 0) { const char *e = getenv("RECOMP_HUD_DRAWS"); v = !e ? 0 : !strcmp(e, "scene") ? 2 : !strcmp(e, "2d") ? 1 : 0; } return v; }
-int gfx_gpu_hud_supported(void) { return hud_draws() != 0; }
 static int hud_classify(const GfxDraw *d, float out[4]) {   /* 1: a HUD draw, its NDC extent in out */
 	if (window_aspect_widen() < 1.01f || !hud_mode_cur || !hud_draws()) return 0;
 	uint64_t t0 = us_now(); float b[6];
@@ -2630,7 +2678,6 @@ static int ao_spec_ok(void) {
 	}
 	return ao_spec.on;
 }
-int gfx_gpu_ssao_supported(void) { return ao_spec_ok(); }
 /* each draw with a perspective projection in the named buffer votes for its camera -- the projection and its viewport's
  * z mapping. The one most draws use is the world's: Killzone draws its first-person weapon with the same projection
  * squeezed into the front tenth of the depth range (z mapping 0.05/0.05, 6 draws, against the world's 0.5/0.5, ~170), and

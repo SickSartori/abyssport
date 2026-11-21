@@ -30,9 +30,6 @@ void metrics_game_frame(void);
  * SDL_WaitAndAcquireGPUSwapchainTexture, which isn't a cost); also pokes the same stderr gate as
  * metrics_game_frame, so a hung game thread still reports 0 fps instead of going silent. */
 void metrics_window_frame(uint64_t blit_us);
-/* fills buf (>=128 bytes recommended) with the title-bar line when it's next due (~2 Hz); returns
- * 0 (buf untouched) otherwise, so window.c only calls SDL_SetWindowTitle when there's something new */
-int metrics_title(char *buf, int bufsz);
 
 /* window.c's audio path: queued milliseconds summed over open ports, how many ports are open, and
  * a best-effort cumulative underrun count (a port whose stream already held less than one
@@ -52,8 +49,5 @@ void metrics_osd_set(int level);   /* the overlay menu's Performance page: a dir
 void metrics_osd_composite(uint8_t *rgba, uint32_t stride_px, uint32_t w, uint32_t h);
 int metrics_osd_lines(char (*out)[40], int max);   /* the same overlay as text lines, for overlay.cpp's ImGui HUD (windowed: no composite, no GPU round trip) */
 
-/* the last ~1.5s of game frames' fps (game_frame_stats' own number): for the overlay menu's
- * Performance page ("show fps"), which wants the figure as a plain double, not drawn into a bitmap */
-double metrics_fps(void);
 
 #endif

@@ -136,7 +136,7 @@ static void save_layer(int layer, const char *header) {
 }
 void settings_save(void) {
 	pthread_mutex_lock(&mx);
-	save_layer(GAME, "# vitarecomp settings for this game: its own options, and where it differs from the shared settings (runtime/core/settings.h)");
+	save_layer(GAME, "# abyssport's settings for this copy of the game: its own options, and where it differs from the shared settings (src/core/settings.h)");
 	save_layer(SHARED, "# abyssport's settings that outlive a copy of the game (the in-game menu writes them; src/core/settings.h)");
 	pthread_mutex_unlock(&mx);
 }

@@ -137,13 +137,21 @@ set(ABYSS_C_SOURCES
     src/media/video.c
     src/platform/platform_win32.c
     src/platform/win32_compat.c
+    src/ui/keycap.c
     src/ui/window.c
 )
 # The runtime is a library of its own: the release ships it compiled, and the player's PC links the game's code to it
 # (tools/build_game.py) with the same compiler. Linked whole: some of its files register themselves from constructors.
-add_library(abyssrt STATIC ${ABYSS_C_SOURCES} src/ui/overlay.cpp res/utf8.rc)
+# The launcher's pages are the game's menu too (F1, src/launcher/launcher_game.h): launcher.cpp built again, as the
+# launcher itself is (without win32_compat.h, whose names clash with <filesystem>), its objects inside the runtime.
+add_library(abyssmenu OBJECT src/launcher/launcher_in_game.cpp)
+target_include_directories(abyssmenu PRIVATE src/core src/launcher "${CMAKE_SOURCE_DIR}")
+target_compile_options(abyssmenu PRIVATE -w)
+target_compile_definitions(abyssmenu PRIVATE ABYSS_VERSION="${PROJECT_VERSION}")
+target_link_libraries(abyssmenu PRIVATE imgui SDL3::SDL3-static)
+add_library(abyssrt STATIC ${ABYSS_C_SOURCES} src/ui/overlay.cpp $<TARGET_OBJECTS:abyssmenu> res/utf8.rc)
 target_include_directories(abyssrt PRIVATE
-    src/audio src/core src/debug src/gfx src/gfx/fsr src/input src/media src/platform src/ui src/recomp
+    src/audio src/core src/debug src/gfx src/gfx/fsr src/input src/launcher src/media src/platform src/ui src/recomp
     "${CMAKE_SOURCE_DIR}"                       # ("third_party/...")
     "${CMAKE_BINARY_DIR}/generated"
     "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}"
