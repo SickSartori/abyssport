@@ -43,6 +43,8 @@
 #include "metrics.h"
 #include "settings.h"
 #include "overlay.h"
+#include "game_texts.h"
+#include "menunav.h"         /* the game's own menus by the pad and the keyboard */
 
 enum { SELECT = 0x1, START = 0x8, UP = 0x10, RIGHT = 0x20, DOWN = 0x40, LEFT = 0x80, LTRIG = 0x100, RTRIG = 0x200,
        TRIANGLE = 0x1000, CIRCLE = 0x2000, CROSS = 0x4000, SQUARE = 0x8000,
@@ -375,6 +377,121 @@ static void touch_to_point(int tx, int ty, float *x, float *y) {
 }
 
 int window_touch(int *x, int *y) { *x = touch_x; *y = touch_y; return touch_down; }
+/* ---- the game's own menus by the pad and the keyboard (menunav.h). A game hook says each frame which of its touchable
+ * buttons a menu has on screen; here the D-pad or the arrows move a highlight among them (the nearest one that way),
+ * Cross / A or the Cross key (Space) touches the one it is on, Circle / B or Escape / Backspace touches the menu's way
+ * back; on a strip that swipes (a carousel: Uncharted's main and pause menus) left and right swipe it instead. The touch
+ * is the mouse's own front-panel touch, made for a moment: a tap held 0.12 s (several of the game's frames), a swipe
+ * dragged 0.26 s and let go still moving (Uncharted takes a touch of two of its frames for a tap, however far it went,
+ * and a drag that stops before it lifts for a nudge that springs back). With no menu on screen the keys and the pad are
+ * the game's as ever. */
+static SDL_SpinLock menu_lock; static MenuItem menu_items[MENU_MAX]; static int menu_n; static uint64_t menu_us;
+void window_menu_items(const MenuItem *items, int n) {
+	if (n > MENU_MAX) n = MENU_MAX;
+	SDL_LockSpinlock(&menu_lock);
+	menu_n = items ? n : 0; if (menu_n) memcpy(menu_items, items, sizeof *items * (size_t)menu_n); menu_us = now_us();
+	SDL_UnlockSpinlock(&menu_lock);
+}
+static int menu_snapshot(MenuItem *out) {   /* the menu now: none once the game stops saying (a quarter second) */
+	SDL_LockSpinlock(&menu_lock);
+	const int n = now_us() - menu_us < 250000 ? menu_n : 0; if (n) memcpy(out, menu_items, sizeof *out * (size_t)n);
+	SDL_UnlockSpinlock(&menu_lock);
+	return n;
+}
+static uint32_t menu_focus;   /* the button the highlight is on (its widget); 0 none yet */
+static int menu_shown;        /* the highlight shows from the first press in a menu */
+static struct { int on; uint64_t t0; float x0, y0, x1, y1; uint64_t us, hold; } menu_touch;   /* a tap or a swipe being made */
+static int menu_at(const MenuItem *it, int n, uint32_t id) { for (int i = 0; i < n; i++) if (it[i].id == id) return i; return -1; }
+static int menu_default(const MenuItem *it, int n) {   /* a carousel, else the button nearest the middle */
+	int best = -1; float bd = 1e9f;
+	for (int i = 0; i < n; i++) {
+		if (it[i].kind == MENU_CAROUSEL) return i;
+		if (it[i].kind == MENU_PART) continue;
+		const float dx = it[i].x + it[i].w * 0.5f - 480, dy = it[i].y + it[i].h * 0.5f - 272, d = dx * dx + dy * dy;
+		if (d < bd) { bd = d; best = i; }
+	}
+	return best;
+}
+static void menu_touch_start(float x0, float y0, float x1, float y1, uint64_t us, uint64_t hold) {
+	menu_touch.on = 1; menu_touch.t0 = now_us(); menu_touch.us = us; menu_touch.hold = hold;
+	menu_touch.x0 = x0; menu_touch.y0 = y0; menu_touch.x1 = x1; menu_touch.y1 = y1;
+}
+static void menu_tap(const MenuItem *t) { const float cx = t->x + t->w * 0.5f, cy = t->y + t->h * 0.5f; menu_touch_start(cx, cy, cx, cy, 120000, 40000); }
+/* the touch being made, this frame: down along its path, then up -- a tap held still a moment, a swipe let go while still
+ * moving (a carousel turns to the next one on a quick flick; a slow drag that stops only nudges it and it springs back) */
+static void menu_tick(void) {
+	if (!menu_touch.on) return;
+	const uint64_t t = now_us() - menu_touch.t0;
+	if (t >= menu_touch.us + menu_touch.hold) { menu_touch.on = 0; touch_down = 0; return; }
+	const float f = t >= menu_touch.us ? 1.0f : (float)t / (float)menu_touch.us;
+	touch_x = (int)(2.0f * (menu_touch.x0 + (menu_touch.x1 - menu_touch.x0) * f));
+	touch_y = (int)(2.0f * (menu_touch.y0 + (menu_touch.y1 - menu_touch.y0) * f));
+	touch_down = 1;
+}
+/* an event a menu takes (1), or the game's (0) */
+static int menu_event(const SDL_Event *e) {
+	enum { NONE, UP, DOWN, LEFT, RIGHT, OK, BACK };
+	int act = NONE, release = 0;
+	if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+		const int b = e->gbutton.button;
+		act = b == SDL_GAMEPAD_BUTTON_DPAD_UP ? UP : b == SDL_GAMEPAD_BUTTON_DPAD_DOWN ? DOWN : b == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? LEFT
+		    : b == SDL_GAMEPAD_BUTTON_DPAD_RIGHT ? RIGHT : b == SDL_GAMEPAD_BUTTON_SOUTH && !cur_mode ? OK : b == SDL_GAMEPAD_BUTTON_EAST ? BACK : NONE;
+		release = e->type == SDL_EVENT_GAMEPAD_BUTTON_UP;
+	} else if ((e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) || e->type == SDL_EVENT_KEY_UP) {
+		const SDL_Keycode k = e->key.key;
+		int cross = 0; for (int i = 0; i < KB_N; i++) if (kb_binds[i].bit == CROSS && kb_binds[i].kc == k) cross = 1;
+		act = k == SDLK_UP ? UP : k == SDLK_DOWN ? DOWN : k == SDLK_LEFT ? LEFT : k == SDLK_RIGHT ? RIGHT
+		    : cross || k == SDLK_SPACE ? OK : k == SDLK_ESCAPE || k == SDLK_BACKSPACE ? BACK : NONE;
+		release = e->type == SDL_EVENT_KEY_UP;
+	}
+	if (act == NONE || overlay_is_open() || overlay_dialog_active()) return 0;
+	MenuItem it[MENU_MAX]; const int n = menu_snapshot(it);
+	if (!n) { menu_shown = 0; return 0; }
+	int back = -1; for (int i = 0; i < n; i++) if (it[i].kind == MENU_BACK) back = i;
+	if (act == BACK && back < 0) return 0;   /* no way back on screen: Circle stays the game's */
+	if (release || menu_touch.on) return 1;  /* (a release, or a press while a touch is still being made: taken, nothing more) */
+	int f = menu_at(it, n, menu_focus);
+	if (f < 0 || it[f].kind == MENU_PART) { f = menu_default(it, n); menu_focus = f >= 0 ? it[f].id : 0; }
+	if (f < 0) return 0;
+	const MenuItem *t = &it[f];
+	const float cx = t->x + t->w * 0.5f, cy = t->y + t->h * 0.5f;
+	if (act == OK) { menu_tap(t); menu_shown = 0; }   /* (the mark goes with the touch: a load or the next page may follow) */
+	else if (act == BACK) { menu_tap(&it[back]); menu_shown = 0; }
+	else if (!menu_shown && t->kind != MENU_CAROUSEL) menu_shown = 1;   /* the first press shows where the mark is (a carousel has none: it acts at once) */
+	else if (t->kind == MENU_CAROUSEL && (act == LEFT || act == RIGHT)) {
+		/* how far: past half the item in the middle (the button over the strip's middle; a long one -- Uncharted's pause
+		 * menu's "Restart from checkpoint" -- needs a longer swipe than the main menu's), and never under 180 either way */
+		float item = 0;
+		for (int i = 0; i < n; i++) if (i != f && it[i].x <= cx && it[i].x + it[i].w >= cx && it[i].y < t->y + t->h && it[i].y + it[i].h > t->y && it[i].w < t->w) item = it[i].w;
+		const float d = fminf(fmaxf(180.0f, item * 0.6f), t->w * 0.45f) * (act == RIGHT ? 1.0f : -1.0f);   /* the next one to the right: swipe the strip left */
+		menu_touch_start(cx + d, cy, cx - d, cy, 260000, 0);
+	} else {   /* the nearest button that way: its distance along the way, its offset across it counted twice */
+		int best = -1; float bs = 1e9f;
+		for (int i = 0; i < n; i++) {
+			if (i == f || it[i].kind == MENU_PART) continue;
+			const float dx = it[i].x + it[i].w * 0.5f - cx, dy = it[i].y + it[i].h * 0.5f - cy;
+			const float along = act == RIGHT ? dx : act == LEFT ? -dx : act == DOWN ? dy : -dy, across = act == LEFT || act == RIGHT ? fabsf(dy) : fabsf(dx);
+			if (along <= 1.0f) continue;
+			const float s = along + 2.0f * across;
+			if (s < bs) { bs = s; best = i; }
+		}
+		if (best >= 0) menu_focus = it[best].id;
+	}
+	return 1;
+}
+/* the highlight's frame for the overlay (window points), or none */
+static void menu_highlight(void) {
+	MenuItem it[MENU_MAX]; const int n = menu_snapshot(it);
+	if (!n) menu_shown = 0;
+	const int f = n && menu_shown && !overlay_is_open() ? menu_at(it, n, menu_focus) : -1;
+	/* (a carousel shows its own choice, the middle one lit; the whole screen has nothing to frame) */
+	if (f < 0 || it[f].kind == MENU_CAROUSEL || it[f].kind == MENU_SCREEN) { overlay_menu_focus(NULL); return; }
+	float x0, y0, x1, y1;
+	touch_to_point((int)(2 * it[f].x), (int)(2 * it[f].y), &x0, &y0);
+	touch_to_point((int)(2 * (it[f].x + it[f].w)), (int)(2 * (it[f].y + it[f].h)), &x1, &y1);
+	const float r[4] = {x0, y0, x1 - x0, y1 - y0};
+	overlay_menu_focus(r);
+}
 /* A game hook's word that the game wants a front-panel swipe now (Killzone: a brutal melee / interrogation gesture window):
  * with the mouse captured (keyboard + mouse), the left button then drags a touch instead of firing -- from the panel's
  * centre, moved by the mouse's motion -- so a quick drag lands inside the window. Without it a swipe meant Alt for the
@@ -1017,6 +1134,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			 * the input to keyboard + mouse */
 			if (e.type == SDL_EVENT_FINGER_DOWN || e.type == SDL_EVENT_FINGER_MOTION || e.type == SDL_EVENT_FINGER_UP || e.type == SDL_EVENT_FINGER_CANCELED) { screen_finger(&e); continue; }
 			if ((e.type == SDL_EVENT_MOUSE_MOTION && e.motion.which == SDL_TOUCH_MOUSEID) || ((e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) && e.button.which == SDL_TOUCH_MOUSEID)) continue;
+			if (menu_event(&e)) continue;   /* a game menu on screen: the D-pad, the arrows, Cross and Circle move and touch in it */
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F12) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (F12)\n"); }
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F10) metrics_osd_cycle();
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F11) window_set_fullscreen(!settings_int("fullscreen", 0));   /* as the launcher's Window mode row says */
@@ -1457,6 +1575,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 				float px, py; SDL_GetMouseState(&px, &py);
 				mt = mouse_to_touch(px, py, 0, &mtx, &mty);
 			}
+			menu_tick(); menu_highlight();
 			overlay_touch_cursor(mt);
 			overlay_frame(cmd, swap, ww, wh, dt);
 			/* the gamepad-touch markers: the bumper cursor, the touchpad's fingers, a right-button rear

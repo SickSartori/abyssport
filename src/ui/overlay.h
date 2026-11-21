@@ -91,6 +91,9 @@ void overlay_frame(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w
  * the rear panel's rows while rear touch is in play. Drawn like overlay_frame (LOAD, after the blit);
  * a no-op with nothing to show or the menu open. */
 typedef struct { float x, y; int rear, pressed, cursor; } OverlayMark;
+/* the game menu's button the pad and the arrows are on (window.c's menu navigation, menunav.h): x, y, w, h in window
+ * points, drawn as a frame with the marks; NULL or w 0 none */
+void overlay_menu_focus(const float rect[4]);
 /* window.c: the free pointer is a touch cursor this frame (drawn as a mark): the OS arrow is hidden over the picture */
 void overlay_touch_cursor(int on);
 void overlay_marks(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w, uint32_t h, double dt_s, const OverlayMark *marks, int n, const float rear_rect[4]);

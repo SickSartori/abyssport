@@ -285,6 +285,8 @@ static void build_toasts(float w, float hgt, double t) {
  * (metrics.c's F10 lines) -- no window, no input, the foreground draw list only */
 static const OverlayMark *g_marks; static int g_nmarks;
 static float g_rear[4];   /* the rear panel's rows on the picture, in window points (x, y, w, h); w 0: none */
+static float g_focus[4];  /* the game menu's button the pad is on (window.c, menunav.h), window points; w 0: none */
+void overlay_menu_focus(const float rect[4]) { for (int i = 0; i < 4; i++) g_focus[i] = rect ? rect[i] : 0; }
 static char g_osd[6][40]; static int g_nosd;   /* the overlay's lines this frame (metrics_osd_lines) */
 int overlay_draws_hud(void) { return g_ctx && g_has_window; }
 static void build_marks(void) {
@@ -295,6 +297,11 @@ static void build_marks(void) {
 		for (int i = 0; i < g_nosd; i++) { ImVec2 sz = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, g_osd[i]); if (sz.x > wmax) wmax = sz.x; }
 		dl->AddRectFilled(ImVec2(x, y), ImVec2(x + wmax + 2 * pad, y + g_nosd * lh + 2 * pad), IM_COL32(0, 0, 0, 170));
 		for (int i = 0; i < g_nosd; i++) dl->AddText(font, fs, ImVec2(x + pad, y + pad + i * lh), IM_COL32(255, 255, 255, 255), g_osd[i]);
+	}
+	if (g_focus[2] > 0) {   /* the pad's place in the game's menu: a short thin line under the button, its middle half */
+		const float k = ImGui::GetMainViewport()->Size.y / 544.0f, h = fmaxf(2.0f, 1.5f * k), y = g_focus[1] + g_focus[3] + 3 * k;
+		const float cx = g_focus[0] + g_focus[2] * 0.5f, half = g_focus[2] * 0.25f;
+		dl->AddRectFilled(ImVec2(cx - half, y), ImVec2(cx + half, y + h), IM_COL32(255, 255, 255, 170), h * 0.5f);
 	}
 	if (g_rear[2] > 0) dl->AddRect(ImVec2(g_rear[0], g_rear[1]), ImVec2(g_rear[0] + g_rear[2], g_rear[1] + g_rear[3]), IM_COL32(255, 170, 60, 140), 0.0f, 2.0f);   /* (rounding 0, thickness 2: ImGui 1.92.8+ argument order -- the old (0, 0, 2.0f) put 2 in `flags`, an ImGui user-error assert) */
 	for (int i = 0; i < g_nmarks; i++) {
@@ -413,7 +420,7 @@ static void build_closed(void) {
 			g_toast_checked = true;
 			if (!settings_has("touch_intro_shown")) {   /* the player's first game: the touch card first (it says where the menu is too) */
 				g_intro = true; settings_set_int("menu_hint_shown", 1); settings_save(); g_paused = true; apply_pause();
-			} else if (!settings_has("menu_hint_shown")) { overlay_toast_titled("Menu", "[F1] or the PS button: settings, controls, back to the launcher", TOAST_S); settings_set_int("menu_hint_shown", 1); settings_save(); }
+			} else if (!settings_has("menu_hint_shown")) { overlay_toast_titled(game_text(GT_T_MENU), game_text(GT_MENU_HINT), TOAST_S); settings_set_int("menu_hint_shown", 1); settings_save(); }
 		}
 		/* the OS cursor: hidden after a few seconds still over the picture, back the moment it moves */
 		const ImVec2 m = io.MousePos;
@@ -423,8 +430,8 @@ static void build_closed(void) {
 		if (g_touch_cursor && !popup_open && !io.WantCaptureMouse) ImGui::SetMouseCursor(ImGuiMouseCursor_None);   /* (the touch mark stands in for it) */
 	} else if (g_force_toast) {   /* headless (the dump): RECOMP_OVERLAY_DUMP_UI=toast */
 		g_force_toast = false;
-		overlay_toast_titled("Menu", "[F1] or the PS button: settings, controls, back to the launcher", TOAST_S);
-		overlay_toast_titled("Balance", "[A] [D] tilt left / right", TOAST_S);
+		overlay_toast_titled(game_text(GT_T_MENU), game_text(GT_MENU_HINT), TOAST_S);
+		char bal[160]; snprintf(bal, sizeof bal, game_text(GT_BAL_KEYS), "A", "D"); overlay_toast_titled(game_text(GT_T_BALANCE), bal, TOAST_S);
 	}
 	if (g_has_window) {   /* the shader prep (gfx_gpu.c): the card when it asks (after the touch card), the corner line while skipped, a toast when done */
 		int done, total; double eta; const int ps = gfx_gpu_shader_prep(&done, &total, &eta);
@@ -816,7 +823,7 @@ void overlay_marks(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w
 	/* headless (the dump's HUD check): only with something to show. Windowed: every present -- the toasts'
 	 * timers, the cursor and the capture flag live in this frame (a frame that draws nothing is
 	 * a few microseconds of CPU and no render pass: render_frame) */
-	if (!g_has_window && !n && !g_nosd && !(rear_rect && rear_rect[2] > 0)) return;
+	if (!g_has_window && !n && !g_nosd && !(rear_rect && rear_rect[2] > 0) && !(g_focus[2] > 0)) return;
 	g_marks = marks; g_nmarks = n;
 	for (int i = 0; i < 4; i++) g_rear[i] = rear_rect ? rear_rect[i] : 0;
 	render_frame(cmd, target, w, h, dt_s, g_has_window, build_closed);

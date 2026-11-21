@@ -8,6 +8,7 @@
  * runtime/core/hooks.h. Each one is this game's own feature, named for the guest function it hooks.
  */
 #include "hooks.h"
+#include "../ui/menunav.h"
 
 /* Uncharted at 60 fps: characters ran in place at the end of a log (Dante on every flat log, Drake now
  * and then). Walking a log is a movement state (component +0xdc, update fn_81154ace) that leads the
@@ -609,9 +610,120 @@ void recomp_hook_uc_balance_tick(Cpu *c) { (void)c; extern void window_tilt_tick
  * 0x818c9cd0), the same move-controller base -- its slot 3, fn_811e1016, ran on every frame of a 3218-frame count
  * window down the slide (the canoe's and the balance's slot 3: none) */
 void recomp_hook_uc_slide_tick(Cpu *c) { (void)c; extern void window_tilt_tick(int kind); window_tilt_tick(2); }
+static void uc_menu_scan(void);
 void recomp_hook_uc_items_reset(Cpu *c) {
 	uint32_t n = RD32(c->r[0] + 0xeac);
 	if (n > uc_items_peak) uc_items_peak = n;
+	uc_menu_scan();   /* (once a frame, the menus' too: the renderer runs under them) */
+}
+/* ---- Uncharted's menus by the pad and the keyboard (ui/menunav.h). Its menus are touch only: no button moves through
+ * them. What a touch can reach is one router's table (fn_8125bc2c's, 0x1c an entry, +4 the widget; found through the UI
+ * manager [0x819052f4]: [[[mgr+0xc]+0]+0x5c], RECOMP_UC_TOUCH_TRACE 2026-11-21). A widget (game/ui/definitions/*.bsp,
+ * the same fields): +8 its name, +0x30 its parent, +0x50/+0x54 its top-left in its parent, +0x58/+0x5c its size, and
+ * +0xa8/+0xac its top-left on the screen as last drawn (its transform's translation: the popups slide in by an offset
+ * of their own, +0x12c, that the layout positions don't have). Never drawn yet, that is 0, 0: the place is then the sum
+ * of the positions up its parents (a hidden popup's sits off the screen, at y 608).
+ * Each frame the widgets of a menu (its root one of kMenuRoots: the in-game HUD's touch areas are not a menu's) whose
+ * middle is on the screen go to window.c; a popup up (its "backgroundblocker", which swallows touches behind it)
+ * leaves only its own. Read on the game's own thread, between its frames. */
+static int uc_ptr(uint32_t p) { return (p >= 0x10000000u && p < 0x40000000u) || (p >= 0x81000000u && p < 0x82000000u); }
+static int uc_widget_name(uint32_t w, char *out, int n) {
+	const uint32_t p = RD32(w + 8); int len = 0;
+	if (uc_ptr(p)) for (uint8_t ch; len < n - 1 && (ch = RD8(p + len)) >= 0x20 && ch < 0x7f; len++) out[len] = (char)ch;
+	out[len] = 0; return len;
+}
+/* the menus' own root widgets (the first of each definition: pause_and_main_menu_defs/ *.bsp, the black market's, the
+ * journal's pages, the popups); a name ending in '*' is a prefix. Not the HUD's, nor a puzzle's (a touch there is play). */
+static const char *const kMenuRoots[] = {
+	"ESRB_eng_Menu", "HavokMenu", "LightSensitivityMenu", "MainMenuAimingMenu", "MainAudioMenu", "BonusMenu", "MainMenuCameraMenu",
+	"ChapterSelect", "ControlOptionsMenu", "ControlsMenu", "MainMenuGameMenu", "MainLanguageMenu", "MainMenu_1", "MedalsMenu",
+	"NewGameOptionsMenu", "MainMenuOptionsMenu", "RewardsMenu", "MainMenuSixaxisMenu", "SplashMenu", "SplashDemoMenu", "StatsMenu",
+	"StudioMovie", "TreasuresMenu", "PauseOptionsMenu", "PauseRestartMenu", "PauseMenu_temp", "PauseMenu", "PauseMenuDemo",
+	"SaveWarningMenu", "PresentsMenu", "MainBlackMarketNearMenu", "Blackmarket_*", "GenericPopup", "GameCredits",
+	"journal*", "Journal*", "TOC_parent", "Treasures_parent", "Mysteries_parent", "Clues_parent", "Locations_parent", "Location_*",
+	"cluespage_*", "chapbook_*", "Full*", "map_full_*", "freephoto*", "fortune_parent", "combat_parent", "gameclues*",
+};
+static int uc_menu_root(const char *name) {
+	for (size_t i = 0; i < sizeof kMenuRoots / sizeof *kMenuRoots; i++) {
+		const char *r = kMenuRoots[i]; const size_t n = strlen(r);
+		if (r[n - 1] == '*' ? !strncmp(name, r, n - 1) : !strcmp(name, r)) return 1;
+	}
+	return 0;
+}
+static float uc_f(uint32_t a) { uint32_t v = RD32(a); float f; memcpy(&f, &v, 4); return f; }
+static void uc_menu_scan(void) {
+	enum { DEPTH = 24 };
+	typedef struct { uint32_t w, up[DEPTH]; int nup; float x, y, ww, hh; char name[48]; int kind, drop; } Item;
+	static Item it[MENU_MAX * 2]; int n = 0;
+	const uint32_t mgr = RD32(0x819052f4u), l = uc_ptr(mgr) ? RD32(mgr + 0xc) : 0, n0 = uc_ptr(l) ? RD32(l) : 0, r = uc_ptr(n0) ? RD32(n0 + 0x5c) : 0;
+	const uint32_t tab = uc_ptr(r) ? RD32(r + 0xc) : 0, end = tab ? RD32(r + 0x10) : 0;
+	if (!uc_ptr(tab) || end < tab || (end - tab) % 0x1c || (end - tab) / 0x1c > 2048) { window_menu_items(0, 0); return; }
+	for (uint32_t e = tab; e < end && n < MENU_MAX * 2; e += 0x1c) {
+		const uint32_t w = RD32(e + 4); if (!uc_ptr(w)) continue;
+		int dup = 0; for (int k = 0; k < n && !dup; k++) dup = it[k].w == w;
+		if (dup) continue;
+		Item *t = &it[n]; t->w = w; t->nup = 0; t->x = t->y = 0; t->drop = 0;
+		uint32_t at = w; int menu = 0; char nm[48];
+		for (int d = 0; d < DEPTH && uc_ptr(at); d++) {   /* up to the top: its place, and whether a menu holds it */
+			t->x += uc_f(at + 0x50); t->y += uc_f(at + 0x54);
+			if (!menu && uc_widget_name(at, nm, sizeof nm)) menu = uc_menu_root(nm);
+			const uint32_t up = RD32(at + 0x30);
+			if (!uc_ptr(up) || up == at) break;
+			t->up[t->nup++] = up; at = up;
+		}
+		if (!menu) continue;
+		if (RD32(w + 0xa8) || RD32(w + 0xac)) { t->x = uc_f(w + 0xa8); t->y = uc_f(w + 0xac); }   /* (as drawn) */
+		t->ww = uc_f(w + 0x58); t->hh = uc_f(w + 0x5c);
+		uc_widget_name(w, t->name, sizeof t->name);
+		t->kind = strstr(t->name, "slide_menu") || strstr(t->name, "slidemenu") ? MENU_CAROUSEL
+		        : strstr(t->name, "previous") || strstr(t->name, "back_button") || strstr(t->name, "BackButton") ? MENU_BACK
+		        : !strcmp(t->name, "Screentouch_widget") ? MENU_SCREEN : MENU_BUTTON;
+		n++;
+	}
+	/* a popup up: only its own widgets (those under the parent of an on-screen blocker); the blockers themselves never */
+	uint32_t popup = 0;
+	for (int k = 0; k < n; k++) {
+		const int eater = !strcmp(it[k].name, "backgroundblocker") || strstr(it[k].name, "touch_eater") || strstr(it[k].name, "toucheater");
+		if (!eater) continue;
+		it[k].drop = 1;
+		if (!strcmp(it[k].name, "backgroundblocker") && it[k].nup && it[k].y < 272 && it[k].y + it[k].hh > 272) popup = it[k].up[0];
+	}
+	int others = 0;
+	for (int k = 0; k < n; k++) {
+		Item *t = &it[k];
+		const float cx = t->x + t->ww * 0.5f, cy = t->y + t->hh * 0.5f;
+		if (!(cx >= 0 && cx < 960 && cy >= 0 && cy < 544) || t->ww <= 0 || t->hh <= 0) t->drop = 1;
+		if (popup) { int in = 0; for (int u = 0; u < t->nup && !in; u++) in = t->up[u] == popup; if (!in) t->drop = 1; }
+		/* a button's own touch area (its child TouchArea_prefab...): the button stands for it */
+		if (t->nup && !strncmp(t->name, "TouchArea", 9)) for (int j = 0; j < n; j++) if (it[j].w == t->up[0]) { t->drop = 1; break; }
+		if (!t->drop && t->kind != MENU_SCREEN) others++;
+	}
+	/* a carousel's own items (the one in its middle is a touch area of its own): the strip swipes, they are not stops */
+	for (int k = 0; k < n; k++) {
+		if (it[k].drop || it[k].kind != MENU_CAROUSEL) continue;
+		for (int j = 0; j < n; j++) {
+			Item *t = &it[j];
+			if (j == k || t->drop || t->kind == MENU_CAROUSEL) continue;
+			const float cx = t->x + t->ww * 0.5f, cy = t->y + t->hh * 0.5f;
+			if (cx >= it[k].x && cx <= it[k].x + it[k].ww && cy >= it[k].y && cy <= it[k].y + it[k].hh && t->kind == MENU_BUTTON) t->kind = MENU_PART;
+		}
+	}
+	MenuItem out[MENU_MAX]; int m = 0;
+	for (int k = 0; k < n && m < MENU_MAX; k++) {
+		const Item *t = &it[k];
+		if (t->drop || (others && t->kind == MENU_SCREEN)) continue;
+		out[m++] = (MenuItem){ t->x, t->y, t->ww, t->hh, t->w, t->kind };
+	}
+	window_menu_items(out, m);
+	if (uc_touch_on()) {   /* (RECOMP_UC_TOUCH_TRACE) the menu as it changes */
+		static uint32_t sig; uint32_t s = (uint32_t)m * 2654435761u;
+		for (int k = 0; k < m; k++) s = s * 31 + out[k].id + (uint32_t)out[k].x * 7 + (uint32_t)out[k].y;
+		if (s != sig) {
+			sig = s; fprintf(stderr, "uc menu: %d buttons%s\n", m, popup ? " (a popup)" : "");
+			for (int k = 0; k < n; k++) if (!it[k].drop && !(others && it[k].kind == MENU_SCREEN))
+				fprintf(stderr, "  %s kind %d at %.0f,%.0f size %.0fx%.0f\n", it[k].name, it[k].kind, it[k].x, it[k].y, it[k].ww, it[k].hh);
+		}
+	}
 }
 /* The pools themselves, made 4x larger (8192 items): fn_812419d0, the renderer's setup (once, from
  * fn_8124570e), allocates the item storage (+0xea4, 64 bytes an item), the array of pointers to them
