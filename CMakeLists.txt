@@ -21,9 +21,12 @@ set(ABYSS_RECOMP_DIR "${CMAKE_SOURCE_DIR}/game/library/decrypted/PCSA00029/recom
     "The recompiler's output for PCSA00029 1.00 (tools/make_game.py): game*.c, the libraries' mod_*.c, the .img images")
 file(GLOB ABYSS_GAME_SOURCES CONFIGURE_DEPENDS "${ABYSS_RECOMP_DIR}/game.c" "${ABYSS_RECOMP_DIR}/game_part*.c"
                                                "${ABYSS_RECOMP_DIR}/mod_*.c")
+# Without it only the launcher and the runtime are built: what the release ships (tools/make_package.py), and all the
+# CI can build, which has no copy of the game.
 if(NOT ABYSS_GAME_SOURCES)
-    message(FATAL_ERROR "The game's recompiled code is missing: no game.c in ${ABYSS_RECOMP_DIR}. It is made from "
-                        "your own copy of the game by tools/make_game.py; set ABYSS_RECOMP_DIR if it is somewhere else.")
+    message(WARNING "The game's recompiled code is missing: no game.c in ${ABYSS_RECOMP_DIR}, so abyss.exe and its test "
+                    "are left out. It is made from your own copy of the game by tools/make_game.py; set "
+                    "ABYSS_RECOMP_DIR if it is somewhere else.")
 endif()
 
 # The POSIX names Windows spells differently, in front of every C file of ours (src/platform/win32_compat.h):
@@ -33,10 +36,12 @@ set(ABYSS_COMPAT -D_FILE_OFFSET_BITS=64 -include "${CMAKE_SOURCE_DIR}/src/platfo
 # The game: 32,000 functions of ARM code as C, 425 MB of it, and Sony's libraries recompiled the same way: libc and
 # libfios2 from the game, libgxm, libgpu and libscemp4 from the firmware. An object library: each library registers
 # its tables from a constructor nothing refers to, which a static library would leave out of the program.
+if(ABYSS_GAME_SOURCES)
 add_library(abyssgame OBJECT ${ABYSS_GAME_SOURCES})
 target_include_directories(abyssgame PUBLIC src/recomp)
 # No fused multiply-adds: the Vita's VFP rounds the product before it adds (rt.h). No warnings: generated code.
 target_compile_options(abyssgame PRIVATE -ffp-contract=off -w ${ABYSS_COMPAT} -D_POSIX_THREAD_SAFE_FUNCTIONS)
+endif()
 
 include(FetchContent)
 
@@ -169,6 +174,7 @@ set_property(SOURCE src/media/video.c APPEND PROPERTY COMPILE_DEFINITIONS RECOMP
 target_link_libraries(abyssrt PUBLIC atrac9 imgui zlibstatic SDL3::SDL3-static
     "${ffmpeg_SOURCE_DIR}/lib/libavcodec.dll.a" "${ffmpeg_SOURCE_DIR}/lib/libavutil.dll.a"
     pthread winmm ws2_32 bcrypt)
+if(ABYSS_GAME_SOURCES)
 # The program: the game's code linked to the runtime, as tools/build_game.py links it on the player's PC.
 add_executable(abyss)
 target_link_libraries(abyss PRIVATE abyssgame "$<LINK_LIBRARY:WHOLE_ARCHIVE,abyssrt>")
@@ -186,6 +192,7 @@ set_tests_properties(abyss_first_frames PROPERTIES
     ENVIRONMENT "RECOMP_MODULES=libc.img,libgxm_es4.img,libgpu_es4.img,libfios2.img,libscemp4.img;RECOMP_GFX=soft;RECOMP_SHADERS=interp;RECOMP_NO_MSPACE=1;RECOMP_SRGB=1;RECOMP_TITLE=PCSA00029;RECOMP_HEADLESS=1;RECOMP_FS=fs;RECOMP_LOG=0;RECOMP_SHOT=3;RECOMP_SHOT_LAST=3"
     PASS_REGULAR_EXPRESSION "frame 3 shot: the last one asked for"
     TIMEOUT 300)
+endif()
 
 # The launcher: the first screen (the game ready or not, settings, controls, how the console's touch and tilt are
 # played on a PC); Play starts abyss. In the look of mc3port's and sm2port's launchers, on SDL3. A window program:

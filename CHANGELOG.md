@@ -4,6 +4,10 @@
 
 ### Added
 
+- The release is built on GitHub (`.github/workflows/release.yml`): every push builds the package, and a tag `vX.Y.Z`
+  makes a draft release with its SHA256SUMS. The launcher and the runtime build without a copy of the game
+  (`abyss.exe` and its test are then left out).
+- README: Known issues.
 - RecompLauncher: `recomplauncher.json` in the release (Play starts the game once it is prepared; resolution, frame
   rate, window, controls, mouse sensitivity and volume on the game's page), and the release zip is named
   `abyssport-<version>-windows-x64.zip`. The launcher's first start keeps a resolution or frame rate set from outside
