@@ -208,7 +208,7 @@ static void h_start(Cpu *c) {
 	static int said;   /* what the camera sees, once a session: a puzzle may be waiting on it */
 	if (!said) {
 		said = 1; int src = source();
-		overlay_toast_titled("Camera", src == 1 ? "The game is using the Vita's camera: your Mac's camera stands in for it\nChange it: [F1] > Controls"
+		overlay_toast_titled("Camera", src == 1 ? "The game is using the Vita's camera: your computer's camera stands in for it\nChange it: [F1] > Controls"
 		              : src == 0 && camera_light() ? "The game is using the Vita's camera: it sees a bright lamp\n[F7] turns it off"
 		              : "The game is using the Vita's camera: it sees a dark room\n[F7] shines a lamp into it", 6.0);
 	}

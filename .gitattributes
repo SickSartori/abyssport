@@ -1,0 +1,2 @@
+# The shader recipes the release ships are read byte for byte (src/gfx/gfx_gpu.c recipes_load): keep LF.
+res/shaders.txt text eol=lf

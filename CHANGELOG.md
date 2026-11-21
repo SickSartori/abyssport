@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
 
 ### Added
 
+- The release is built on GitHub (`.github/workflows/release.yml`): every push builds the package, and a tag `vX.Y.Z`
+  makes a draft release with its SHA256SUMS. The launcher and the runtime build without a copy of the game
+  (`abyss.exe` and its test are then left out).
+- README: Known issues.
+- F11 switches between the window and full screen during the game, as the launcher's Window mode row says; only
+  the launcher's own window did.
 - The launcher: Report a problem (a new issue on GitHub) and Support the project (Ko-fi) above its bottom bar, a
   Support the project row in About, and the hints' keys drawn as keyboard keys.
 - The European copy of the game, PCSF00012 version 1.00, plays as the US one does (the same code; its
@@ -25,6 +31,14 @@
   software and GPU renderers (through SDL3) with the shader translator, audio (NGS, ATRAC9), films (H.264 through
   FFmpeg's DLLs), touch, motion and controllers, the window, the in-game menu, and the patches for Golden Abyss
   (field of view, wider aspect ratios, 60 fps, mouse look, view distance).
+- The in-game menu (F1, or a controller's PS / Xbox button) is the launcher's own pages over the paused game: Resume,
+  Settings, Controls, and Back to the launcher. The internal resolution, full screen and the performance display
+  apply at once, the keys when the menu closes; Esc goes back a step at a time. The game's cards and notes (quitting, the
+  controller layout, shader preparation, the touch card) have the launcher's look.
+- On a keyboard and mouse the game's button prompts show the key or mouse button that plays each action, as set on
+  the Controls page (Space, Shift, the mouse's right button...); a controller brings the console's symbols back. When
+  the game waits for a touch, a note says how to give it with the device in use.
+- Cover, roll and drop are on Left Shift, as in Uncharted on PC.
 - The launcher (`abyssport.exe`): whether the game is ready; the Original,
   Enhanced and Custom styles; picture, effects, game and audio settings; the keyboard's keys and the mouse's five
   buttons, each on any action; and "How to play", a tutorial for keyboard and mouse, a DualSense or an Xbox
@@ -44,7 +58,8 @@
 - The build: llvm-mingw and Ninja, fetched by `tools/get_toolchain.py` (nothing is installed), with the `pc-x64`
   preset. SDL3, zlib and FFmpeg are downloaded at configure time, pinned by version and hash.
 - The shader recipes for the game (`res/shaders.txt`), so its shaders are built as it starts and not at their
-  first use.
+  first use. The file keeps LF line ends (`.gitattributes`), and the runtime reads it with Windows line ends too:
+  checked out with them, every recipe had been refused.
 - The release (`tools/make_package.py`): the launcher, the runtime compiled, the tools, an embedded Python and the
   compiler, in one zip. The first time, the launcher asks for your copy of the game and the firmware file and
   makes the game on your PC (Prepare: decrypted, recompiled, compiled by `tools/build_game.py`), with its progress

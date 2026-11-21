@@ -14,13 +14,17 @@ The setting `input_mode` is `auto` by default: the scheme follows the device use
 switches to keyboard and mouse; a controller button or stick switches back to the controller. `pad` and `kbm`
 fix one of the two.
 
+With keyboard and mouse in use, the game's button prompts show the key or the mouse button that plays each action
+(Space, Shift, the mouse's right button...), as they are set on the Controls page; with a controller, the console's
+symbols come back.
+
 ## Keyboard (defaults)
 
 | Action | Key |
 |---|---|
 | Move (left stick) | W, A, S, D |
 | Cross | Space |
-| Circle | C |
+| Circle (cover, roll, drop) | Left Shift (as in Uncharted on PC) |
 | Square | F |
 | Triangle | E |
 | L (aim) | Q |
@@ -47,7 +51,8 @@ set to.
 
 Holding **Alt** frees the cursor. The cursor is then a finger: the left button touches the front screen, the
 right button touches the rear pad. This is how the game's touch actions are done: tapping an icon, rubbing a
-charcoal sketch, drawing a machete cut, swiping to climb.
+charcoal sketch, drawing a machete cut, swiping to climb. When the game waits for a touch, a note at the top right
+says how to give it with the device in use (the first three times in a session).
 
 Shapes drawn with the mouse are accepted a little more easily than a finger's (a recogniser score of 0.7
 instead of 0.8).
@@ -70,8 +75,9 @@ Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map
 | Key | What it does |
 |---|---|
 | F1 | Opens and closes the in-game menu (settings, controls) |
-| Esc | Closes the menu, or hides the menu bar |
+| Esc | Steps back in the menu, page by page, and closes it |
 | F10 | Cycles the performance display |
+| F11 | Window or full screen |
 | F2 | Cycles the internal resolution, 1x to 6x |
 | F4 | Turns FSR anti-aliasing off and on |
 | F5 | Writes a marker in the log, for a bug report |

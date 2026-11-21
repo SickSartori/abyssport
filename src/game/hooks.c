@@ -276,6 +276,24 @@ void recomp_hook_uc_gesture_press(Cpu *c) {
 static uint32_t uc_succeeded[8];
 void recomp_hook_uc_gesture_update(Cpu *c) {   /* fn_812021e6, r0 the gesture */
 	uint32_t o = c->r[0];
+	{	/* a prompt waiting for its touch -- state 1, armed (+0xe5 0x20) and enabled (8 or 0x80), what the press callback
+		 * fn_812029ce wants before it starts the gesture: the toast that says how to touch (window.c) */
+		const uint8_t e5 = RD8(o + 0xe5);
+		extern void window_touch_prompt_tick(void);
+		if (RD32(o + 0xd0) == 1 && (e5 & 0x20) && (e5 & 0x88)) window_touch_prompt_tick();
+	}
+	if (uc_touch_on()) {   /* each gesture's state as it changes (RECOMP_UC_TOUCH_TRACE) */
+		static uint32_t seen_o[32], seen_s[32]; static int ns;
+		const uint32_t s = RD32(o + 0xd0) | RD8(o + 0xe5) << 8 | RD8(o + 0xe6) << 16;
+		int i = 0; while (i < ns && seen_o[i] != o) i++;
+		if (i == ns && ns < 32) { seen_o[ns] = o; seen_s[ns++] = ~s; }
+		if (i < ns && seen_s[i] != s) {
+			seen_s[i] = s;
+			extern uint64_t display_frames(void);
+			const uint32_t cfg = RD32(o + 0xb8);
+			fprintf(stderr, "uc gesture: frame %llu obj %#x state %u e5 %#x e6 %#x want %#x lr %#x\n", (unsigned long long)display_frames(), o, s & 0xff, (s >> 8) & 0xff, s >> 16, cfg ? RD32(cfg + 0x44) : 0, c->r[14]);
+		}
+	}
 	for (int i = 0; i < 8; i++) if (uc_succeeded[i] == o) {
 		uc_succeeded[i] = 0;
 		if (RD32(o + 0xd0) != 2) return;

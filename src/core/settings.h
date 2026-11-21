@@ -59,11 +59,11 @@
  *   volume        window.c    0..1 (default 1)          master volume: every audio port's gain (RECOMP_VOLUME wins)
  *   audio_sync_trim_ms window.c  -100..100 (default 0)  added to the automatic audio delay (no menu: the A/V sync is measured; for a TV or receiver that adds latency of its own)
  *   audio_buffers window.c    1..4 (default 1)          buffers an audio port may queue ahead (latency vs. crackle; RECOMP_AUDIO_QUEUE wins)
- *   menu_hint_shown  overlay.cpp  1 once the first-launch hint ("move the mouse to the top for the
- *                             menu") has been shown; absent: show it on this game's next windowed run
+ *   menu_hint_shown  overlay.cpp  1 once the first-launch hint ("[F1] or the PS button: settings,
+ *                             controls, back to the launcher") has been shown; absent: show it on this game's next windowed run
  *
- * The in-game overlay (host/overlay.cpp: the full menu on F1, Escape, Back+Start or Guide in
- * window.c, and the menu bar at the top edge) writes all of these; F2 also writes render_scale.
+ * The in-game menu (src/ui/overlay.cpp: the launcher's pages on F1 or Guide in window.c) writes
+ * all of these; F2 also writes render_scale.
  *
  * Thread-safe; values are read often (cheap: a short table under a mutex), written rarely.
  */
