@@ -77,6 +77,7 @@ Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map
 | F1 | Opens and closes the in-game menu (settings, controls) |
 | Esc | Steps back in the menu, page by page, and closes it |
 | F10 | Cycles the performance display |
+| F11 | Window or full screen |
 | F2 | Cycles the internal resolution, 1x to 6x |
 | F4 | Turns FSR anti-aliasing off and on |
 | F5 | Writes a marker in the log, for a bug report |

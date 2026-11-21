@@ -1021,6 +1021,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if ((e.type == SDL_EVENT_MOUSE_MOTION && e.motion.which == SDL_TOUCH_MOUSEID) || ((e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) && e.button.which == SDL_TOUCH_MOUSEID)) continue;
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F12) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (F12)\n"); }
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F10) metrics_osd_cycle();
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F11) window_set_fullscreen(!settings_int("fullscreen", 0));   /* as the launcher's Window mode row says */
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F5) {   /* a marker in the log: "that just happened" for a bug report (a doubled voice line, a glitch) */
 				static int n; n++; extern uint64_t display_frames(void);
 				fprintf(stderr, "user mark %d at frame %llu\n", n, (unsigned long long)display_frames());

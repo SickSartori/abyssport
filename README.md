@@ -106,6 +106,7 @@ the next start, which "Back to the launcher" makes one click away.
 | F2 | Cycles the internal resolution, 1x to 6x |
 | F4 | FSR anti-aliasing off and on |
 | F10 | Cycles the performance display |
+| F11 | Window or full screen |
 
 ## Known issues
 
