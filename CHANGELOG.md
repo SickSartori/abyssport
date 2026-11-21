@@ -16,6 +16,10 @@
   `gamedata.bin` has other languages). The launcher's Settings, Game has the game's language, from the copy's own:
   English, French and Spanish in the US copy; English (UK), French, German, Italian and Dutch in the European one.
   Automatic follows Windows' language, else the copy's English.
+- The game's own menus with a controller or the keyboard: the D-pad or the arrows move to the next button that way (a
+  short line under it shows where), Cross / A or Space presses it, Circle / B, Esc or Backspace takes the menu's way
+  back; on the main and pause menus' strips left and right turn to the next entry. The console's menus are touch only:
+  these are the same touches, made for you. With no menu on screen the keys and buttons play the game as before.
 - RecompLauncher: `recomplauncher.json` in the release (Play starts the game once it is prepared; resolution, frame
   rate, window, controls, mouse sensitivity and volume on the game's page), and the release zip is named
   `abyssport-<version>-windows-x64.zip`. The launcher's first start keeps a resolution or frame rate set from outside
@@ -31,10 +35,12 @@
   software and GPU renderers (through SDL3) with the shader translator, audio (NGS, ATRAC9), films (H.264 through
   FFmpeg's DLLs), touch, motion and controllers, the window, the in-game menu, and the patches for Golden Abyss
   (field of view, wider aspect ratios, 60 fps, mouse look, view distance).
-- The in-game menu (F1, or a controller's PS / Xbox button) is the launcher's own pages over the paused game: Resume,
-  Settings, Controls, and Back to the launcher. The internal resolution, full screen and the performance display
-  apply at once, the keys when the menu closes; Esc goes back a step at a time. The game's cards and notes (quitting, the
-  controller layout, shader preparation, the touch card) have the launcher's look.
+- The in-game menu (F1, a controller's PS / Xbox button, or Select and Start together) is the launcher's own pages over
+  the paused game: Resume, Settings, Controls, Back to the launcher, and Quit the game, which closes the launcher too.
+  The internal resolution, full screen and the performance display apply at once, the keys when the menu closes; Esc
+  goes back a step at a time. The game's cards and notes (quitting, the controller layout, shader preparation, the
+  touch card, the saved data list and its questions) have the launcher's look and language, and grow with the window.
+  The quit card (closing the window) offers Keep playing, Back to the launcher and Quit the game.
 - On a keyboard and mouse the game's button prompts show the key or mouse button that plays each action, as set on
   the Controls page (Space, Shift, the mouse's right button...); a controller brings the console's symbols back. When
   the game waits for a touch, a note says how to give it with the device in use.

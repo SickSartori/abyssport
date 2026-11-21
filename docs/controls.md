@@ -68,7 +68,16 @@ The console steers these by tilting. On a PC:
 ## Controller
 
 Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map by themselves. The setting
-`shoulder_buttons` chooses whether L and R are the triggers (default) or the bumpers.
+`shoulder_buttons` chooses whether L and R are the triggers (default) or the bumpers. The in-game menu opens with the
+PS / Xbox button or with Select and Start together.
+
+## The game's menus
+
+On the console the game's menus (the title, the main and pause menus, the options, the journal, the popups) are touch
+only. Here the D-pad or the arrow keys move to the next button that way, with a short line under it; Cross / A or
+Space presses it; Circle / B, Esc or Backspace takes the menu's way back when it has one. On the main and pause menus'
+strips left and right turn to the next entry. Each is a touch made for you, so the mouse and the touch cursor still
+work as well. With no menu on screen the keys and buttons play the game.
 
 ## Function keys
 

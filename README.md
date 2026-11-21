@@ -14,7 +14,6 @@
 [![Downloads](https://img.shields.io/github/downloads/SickSartori/abyssport/total)](https://github.com/SickSartori/abyssport/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue)](#requirements)
 [![Licence](https://img.shields.io/github/license/SickSartori/abyssport)](LICENSE)
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub_Sponsors-support-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/SickSartori)
 
 </div>
 
@@ -68,6 +67,8 @@ The two pictures of the game are frames at the Vita's own 960x544; the port can 
 - **The Vita's touch screen, rear pad, tilt and camera on a PC**: the launcher's "How to play" shows each one as a
   small moving scene, for keyboard and mouse, a DualSense or an Xbox controller.
 - **A launcher and an in-game menu** (F1) with the same pages, in English, Italian, Portuguese (Brazil) and Spanish.
+- **The game's menus with a controller or the arrows**: the console's menus are touch only; here the D-pad or the
+  arrow keys move through them and Cross / A or Space presses.
 - **Saved games** are written and read back, in the game's own format.
 
 ## Requirements
@@ -94,6 +95,7 @@ The full guide, key by key: [docs/controls.md](docs/controls.md). The defaults o
 | Pick up, interact (Triangle) | E |
 | Touch the screen / the rear pad | Hold Alt, then the left / right mouse button |
 | In-game menu | F1 |
+| Game menus | Arrows, Space to press, Esc or Backspace to go back |
 
 Every key and mouse button can be changed on the launcher's Controls page or in the in-game menu.
 
