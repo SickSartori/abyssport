@@ -46,6 +46,7 @@ Spanish; the European one English (UK), French, German, Italian and Dutch. Autom
 
 | | |
 |---|---|
+| ![Drake in the jungle, at a higher internal resolution](docs/screenshots/drake.jpg) | ![The ruins in the prologue, with the HUD](docs/screenshots/ruins.jpg) |
 | ![The title screen](docs/screenshots/title.jpg) | ![The launcher](docs/screenshots/launcher.jpg) |
 | ![Launcher settings: the style, then the Picture tab](docs/screenshots/launcher-settings.jpg) | ![How to play: drawing on the touch screen with the mouse](docs/screenshots/launcher-how.jpg) |
 
