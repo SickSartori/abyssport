@@ -13,13 +13,11 @@
  * keys: arrows d-pad, Z cross, X circle, A square, S triangle, Enter start, Backspace select,
  *       Q/W L/R triggers; any SDL gamepad (A/B/X/Y as cross/circle/square/triangle); F10 cycles the
  *       performance overlay off / basic (FPS + frame time) / full (metrics.c); F1 (or a gamepad's
- *       Back+Start held together, or its Guide button) opens/closes the in-game menu (overlay.c*,
- *       Dear ImGui), Escape also closes it -- while it's open every key/mouse/gamepad event above
- *       goes to the menu instead, not the game (see the event loop's own comment on why). The mouse
- *       resting at the window's top edge slides the menu BAR down (overlay.cpp: the same settings,
- *       without pausing; every item shows its hotkey); mouse events always reach ImGui so it can see
- *       that hover, and one it captures (the bar, a menu, the pull tab) is never a touch. Escape
- *       hides the bar. The OS cursor hides after a few seconds still over the picture (overlay.cpp).
+ *       Back+Start held together, or its Guide button) opens/closes the in-game menu (overlay.cpp: the
+ *       launcher's pages), Escape steps back in it -- while it's open every key/mouse/gamepad event above
+ *       goes to the menu instead, not the game (see the event loop's own comment on why). Mouse events
+ *       always reach ImGui, and one it captures is never a touch. The OS cursor hides after a few
+ *       seconds still over the picture (overlay.cpp).
  * env:  RECOMP_HEADLESS=1   no window (tests, the checker); RECOMP_SCALE=n window scale (default 1)
  *       RECOMP_RENDER_SCALE=n the GPU backend's internal resolution (1-6, default 1; F2 cycles them: gfx_gpu.c)
  *       RECOMP_OSD=0|1|2    the overlay's level at start-up (default 0: see metrics.c and window_present_gpu's own comment on why the GPU path doesn't default it on)
@@ -28,7 +26,7 @@
  *       RECOMP_OVERLAY_DUMP=f.ppm  headless: renders the in-game menu once, open, over the next
  *                           presented frame, into an offscreen texture, and writes it to f -- so the
  *                           menu can be looked at without a screen (see overlay_dump_maybe below)
- *       RECOMP_OVERLAY_DUMP_UI=menu|menu:<tab>|bar|Game|View|Controls|Help|toast|intro[:pad|:touch][@<s>]|quit|layout[,...]  what that dump
+ *       RECOMP_OVERLAY_DUMP_UI=menu|toast|intro[:pad|:touch][@<s>]|quit|layout|prep[,...]  what that dump
  *                           shows (overlay.h: overlay_render_forced); several, comma-separated, write
  *                           one file each, f_<name>.ppm
  */
@@ -45,6 +43,8 @@
 #include "metrics.h"
 #include "settings.h"
 #include "overlay.h"
+#include "game_texts.h"
+#include "menunav.h"         /* the game's own menus by the pad and the keyboard */
 
 enum { SELECT = 0x1, START = 0x8, UP = 0x10, RIGHT = 0x20, DOWN = 0x40, LEFT = 0x80, LTRIG = 0x100, RTRIG = 0x200,
        TRIANGLE = 0x1000, CIRCLE = 0x2000, CROSS = 0x4000, SQUARE = 0x8000,
@@ -98,7 +98,6 @@ static int shoulders_swapped;
 static volatile int pad_gyro;               /* the pad has a gyroscope and accelerometer streaming (motion.c) */
 void motion_feed_accel(const float s[3], uint64_t t_ns); void motion_feed_gyro(const float s[3], uint64_t t_ns);
 void motion_recenter(void); void motion_pause(void); void motion_lost(void); void motion_feed_virtual(float angle, uint64_t t_ns); int motion_use_virtual(int on, float *roll);
-int window_gyro_present(void) { return pad_gyro; }
 static SDL_Window *win;
 
 /* ---- keyboard + mouse (settings "input_mode": auto | pad | kbm, default auto; "mouse_look" 1, "mouse_sens"
@@ -138,7 +137,7 @@ typedef struct { const char *key, *label, *def; uint32_t bit; SDL_Keycode kc; in
 static KbBind kb_binds[] = {
 	{"bind_move_up", "Move forward (left stick)", "W", 0}, {"bind_move_down", "Move back", "S", 0},
 	{"bind_move_left", "Move left", "A", 0}, {"bind_move_right", "Move right", "D", 0},
-	{"bind_cross", "Cross", "Space", CROSS}, {"bind_circle", "Circle", "C", CIRCLE},
+	{"bind_cross", "Cross", "Space", CROSS}, {"bind_circle", "Circle", "Left Shift", CIRCLE},   /* (cover and roll on Shift, as Uncharted on PC) */
 	{"bind_square", "Square", "F", SQUARE}, {"bind_triangle", "Triangle", "E", TRIANGLE},
 	{"bind_l", "L (aim)", "Q", LTRIG}, {"bind_r", "R (fire)", "R", RTRIG},
 	{"bind_start", "Start", "Return", START}, {"bind_select", "Select", "Tab", SELECT},
@@ -170,20 +169,42 @@ static void tilt_section_update(void) {
 	uint64_t t = __atomic_load_n(&tilt_tick_ns, __ATOMIC_RELAXED);
 	int on = t && SDL_GetTicksNS() - t < 250000000ull;
 	if (on && !tilt_section) {   /* what tilts, as a badge (overlay.cpp) */
-		const char *title = tilt_kind == 2 ? "Slide" : "Balance", *verb = tilt_kind == 2 ? "steer" : "tilt";
-		char msg[160];
-		if (kbm_on) snprintf(msg, sizeof msg, "[%s] [%s] %s left / right", SDL_GetKeyName(kb_binds[KB_MOVE_LEFT].kc), SDL_GetKeyName(kb_binds[KB_MOVE_RIGHT].kc), verb);
-		else if (!pad_gyro) snprintf(msg, sizeof msg, "Left stick: %s left / right", verb);
-		else snprintf(msg, sizeof msg, "Tilt the controller to %s", verb);
+		const int slide = tilt_kind == 2; const char *title = game_text(slide ? GT_T_SLIDE : GT_T_BALANCE);
+		char msg[200];
+		if (kbm_on) snprintf(msg, sizeof msg, game_text(slide ? GT_SLIDE_KEYS : GT_BAL_KEYS), SDL_GetKeyName(kb_binds[KB_MOVE_LEFT].kc), SDL_GetKeyName(kb_binds[KB_MOVE_RIGHT].kc));
+		else snprintf(msg, sizeof msg, "%s", game_text(!pad_gyro ? (slide ? GT_SLIDE_STICK : GT_BAL_STICK) : (slide ? GT_SLIDE_GYRO : GT_BAL_GYRO)));
 		overlay_toast_titled(title, msg, 5.0);
 	}
 	tilt_section = on;
+}
+/* A game hook's word that the game shows a touch prompt (Uncharted: a gesture prompt waiting for its touch, hooks.c
+ * uc_gesture_update): a toast says how to touch with what is in use as the prompt appears, three times a run */
+static volatile uint64_t touch_prompt_ns;
+void window_touch_prompt_tick(void) { __atomic_store_n(&touch_prompt_ns, SDL_GetTicksNS(), __ATOMIC_RELAXED); }
+static void touch_prompt_update(void) {
+	static int was, shown;
+	uint64_t t = __atomic_load_n(&touch_prompt_ns, __ATOMIC_RELAXED);
+	int on = t && SDL_GetTicksNS() - t < 500000000ull;
+	if (on && !was && shown < 3) {
+		shown++;
+		overlay_toast_titled(game_text(GT_T_TOUCH), game_text(kbm_on ? GT_TOUCH_KBM : shoulders_swapped ? GT_TOUCH_PAD_L2 : GT_TOUCH_PAD_L1), 6.0);
+	}
+	was = on;
+}
+static volatile unsigned glyph_gen = 1;   /* (the game's button glyphs, below) */
+static char glyph_label[KB_N][24];        /* each binding's key as the glyph shows it (kb_reload: SDL's names are the window thread's) */
+static void key_label(const char *s, char *out, int n) {   /* an SDL key name as short as a cap holds it ("\1".."\4": the arrows) */
+	static const char *const arrows[] = {"Up", "Down", "Left", "Right"};
+	for (int a = 0; a < 4; a++) if (!strcmp(s, arrows[a])) { snprintf(out, n, "%c", a + 1); return; }
+	if (!strncmp(s, "Left ", 5)) s += 5; else if (!strncmp(s, "Right ", 6)) s += 6;
+	snprintf(out, n, "%s", !strcmp(s, "Return") ? "Enter" : !strcmp(s, "Escape") ? "Esc" : !strcmp(s, "Backspace") ? "Back" : s);
 }
 static void kb_reload(void) {   /* the bindings from settings (at start, and when the menu closes: a rebind may have changed them) */
 	for (int i = 0; i < KB_N; i++) {
 		char b[48]; const char *name = settings_str(kb_binds[i].key, kb_binds[i].def, b, sizeof b);
 		SDL_Keycode k = SDL_GetKeyFromName(name);
 		kb_binds[i].kc = k != SDLK_UNKNOWN ? k : SDL_GetKeyFromName(kb_binds[i].def);
+		key_label(SDL_GetKeyName(kb_binds[i].kc), glyph_label[i], sizeof glyph_label[i]);
 	}
 	for (int m = 0; m < MB_N; m++) {
 		char b[48]; const char *name = settings_str(mouse_binds[m].key, mouse_binds[m].def, b, sizeof b);
@@ -191,29 +212,37 @@ static void kb_reload(void) {   /* the bindings from settings (at start, and whe
 		for (int i = 0; i < KB_N; i++) if (!strcmp(kb_binds[i].key + 5, name)) mouse_binds[m].action = i;   /* ("bind_" + name) */
 	}
 	char sb[16]; shoulders_swapped = !strcmp(settings_str("shoulder_buttons", "triggers", sb, sizeof sb), "bumpers");
-}
-int window_mouse_count(void) { return MB_N; }
-const char *window_mouse_label(int m) { return m >= 0 && m < MB_N ? mouse_binds[m].label : ""; }
-int window_mouse_action(int m) { return m >= 0 && m < MB_N ? mouse_binds[m].action : -1; }   /* a row of the keys' table, -1 none */
-void window_mouse_bind(int m, int action) {   /* the menu's choice: that button on that action (-1: on none) */
-	if (m < 0 || m >= MB_N || action >= KB_N) return;
-	mouse_binds[m].action = action < 0 ? -1 : action;
-	settings_set_str(mouse_binds[m].key, action < 0 ? "" : kb_binds[action].key + 5); settings_save();
-}
-int window_kb_count(void) { return KB_N; }
-const char *window_kb_label(int i) { return i >= 0 && i < KB_N ? kb_binds[i].label : ""; }
-const char *window_kb_key_name(int i) { return i >= 0 && i < KB_N ? SDL_GetKeyName(kb_binds[i].kc) : ""; }
-void window_kb_bind(int i, SDL_Keycode k) {   /* the menu's Rebind: that action now on that key (a key another action had is taken from it) */
-	if (i < 0 || i >= KB_N || k == SDLK_UNKNOWN) return;
-	for (int j = 0; j < KB_N; j++) if (j != i && kb_binds[j].kc == k) { kb_binds[j].kc = SDLK_UNKNOWN; settings_set_str(kb_binds[j].key, ""); }
-	kb_binds[i].kc = k; settings_set_str(kb_binds[i].key, SDL_GetKeyName(k)); settings_save();
-}
-void window_kb_reset(void) {
-	for (int i = 0; i < KB_N; i++) settings_set_str(kb_binds[i].key, kb_binds[i].def);
-	for (int m = 0; m < MB_N; m++) settings_set_str(mouse_binds[m].key, mouse_binds[m].def);
-	settings_save(); kb_reload();
+	__atomic_add_fetch(&glyph_gen, 1, __ATOMIC_RELAXED);   /* (the game's button glyphs: a binding may have changed) */
 }
 int window_kbm_active(void) { return kbm_on; }
+/* ---- the game's button glyphs on a keyboard and mouse: gfx_gpu.c draws its prompt textures as the key or mouse button
+ * that plays them (keycap.c) while keyboard and mouse are in use. glyph_gen moves whenever what they show changes -- the
+ * scheme, a binding (kb_reload) -- and gfx_gpu.c draws them again then. */
+unsigned window_glyph_generation(void) { return __atomic_load_n(&glyph_gen, __ATOMIC_RELAXED); }
+int window_glyph_keys(void) { return kbm_on; }
+static void bind_label(int i, char *out, int n) {   /* (before the window's first kb_reload: the default's) */
+	if (glyph_label[i][0]) snprintf(out, n, "%s", glyph_label[i]); else key_label(kb_binds[i].def, out, n);
+}
+/* what plays `action` (a binding's name without "bind_"; "lstick", "rstick" the sticks): a key's label in `label` and 0,
+ * or the mouse button on it (1 left, 2 right, 3 middle, 9 the mouse's motion: the right stick) */
+int window_glyph(const char *action, char *label, int n) {
+	*label = 0;
+	if (!strcmp(action, "rstick")) return 9;
+	if (!strcmp(action, "lstick")) {   /* the four move keys: "WASD" when they're letters, else the forward key */
+		char k[4][24]; int letters = 1;
+		for (int i = 0; i < 4; i++) { bind_label(i, k[i], sizeof k[i]); letters &= strlen(k[i]) == 1 && (unsigned char)k[i][0] > 4; }
+		if (letters) snprintf(label, n, "%s%s%s%s", k[KB_MOVE_UP], k[KB_MOVE_LEFT], k[KB_MOVE_DOWN], k[KB_MOVE_RIGHT]);
+		else snprintf(label, n, "%s", k[KB_MOVE_UP]);
+		return 0;
+	}
+	for (int i = 0; i < KB_N; i++) if (!strcmp(kb_binds[i].key + 5, action)) {
+		static const int button_of[MB_N] = {1, 2, 3, 0, 0};   /* the side buttons have no picture: their action's key shows */
+		for (int m = 0; m < MB_N; m++) if (mouse_binds[m].action == i && button_of[m]) return button_of[m];
+		bind_label(i, label, n);
+		return 0;
+	}
+	return 0;
+}
 /* a game's raw-look hook, once per game frame: the mouse's motion since its last call, in counts (y down),
  * and whether the mouse is looking at all (0: nothing to apply, the deltas are 0) */
 /* RECOMP_INPUT_MOUSE="from-to:dx,dy;...": mouse counts per call over presented-frame ranges -- a headless
@@ -253,7 +282,7 @@ int window_raw_look(void) {
 void window_set_raw_look(int on) { raw_look = on != 0; settings_set_int("raw_look", raw_look); settings_save(); }
 static void raw_look_toggle(void) {
 	window_set_raw_look(!window_raw_look());
-	overlay_toast_titled("Mouse aim", raw_look ? "Direct: the game turns as far as the mouse moves [F8]" : "Stick: the mouse drives the right stick [F8]", 3.0);
+	overlay_toast_titled(game_text(GT_T_MOUSE_AIM), game_text(raw_look ? GT_AIM_DIRECT : GT_AIM_STICK), 3.0);
 }
 static int kb_find(SDL_Keycode k) { for (int i = 0; i < KB_N; i++) if (kb_binds[i].kc == k && k != SDLK_UNKNOWN) return i; return -1; }
 
@@ -267,13 +296,11 @@ static int kb_find(SDL_Keycode k) { for (int i = 0; i < KB_N; i++) if (kb_binds[
 enum { ASPECT_FIT, ASPECT_STRETCH, ASPECT_FILL };
 static int aspect_mode = ASPECT_FIT;
 static const char *aspect_name(int m) { return m == ASPECT_STRETCH ? "stretch" : m == ASPECT_FILL ? "fill" : "fit"; }
-int window_get_aspect(void) { return aspect_mode; }
 void window_set_aspect(int mode) {
 	if (mode < ASPECT_FIT || mode > ASPECT_FILL) return;
 	aspect_mode = mode;
 	settings_set_str("aspect", aspect_name(mode)); settings_save();
 }
-int window_get_fullscreen(void) { return win && (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN) != 0; }
 void window_set_fullscreen(int on) {
 	if (win) SDL_SetWindowFullscreen(win, on != 0);
 	settings_set_int("fullscreen", on != 0); settings_save();
@@ -349,37 +376,122 @@ static void touch_to_point(int tx, int ty, float *x, float *y) {
 	*x = dx + (tx * 0.5f - sx) / sw * dw; *y = dy + (ty * 0.5f - sy) / sh * dh;
 }
 
-/* ---- the Controls page (read-only): the GAME's controls -- the mappings kb_binds (the defaults; rebindable)/pad_bit (below) and
- * mouse_to_touch (above) actually implement, kept here as one small table so the overlay can show them
- * without reaching into this file's own logic. Keep in sync with those if a binding changes. The host's
- * own hotkeys (F1, F2, F10, F12, Guide, R3, the menu bar) are overlay.cpp's shortcuts table: keep that in
- * sync with the event loop below. */
-static const char *const ctrl_rows[][3] = {
-	{"D-pad", "Arrow keys", "D-pad"},
-	{"Cross / Circle / Square / Triangle", "Space / C / F / E", "Cross / Circle / Square / Triangle (Xbox: A / B / X / Y)"},
-	{"Start / Select", "Enter / Tab", "Options / Share or Create (Xbox: Menu / View)"},
-	{"L / R", "Right mouse / left mouse (or Q / R)", "L2 / R2 (Xbox: LT / RT)"},
-	{"Left / right stick", "WASD / the mouse", "Left / right stick"},
-	{"Front touch panel", "Left mouse button (click, drag); hold Alt first while the mouse looks; a swipe prompt: just drag; a two-finger turn: hold and drag down / up; a touchscreen: touch the picture", "Touchpad; or hold L1: a stick + Cross / L2 / R2 (both sticks: two fingers); a two-finger turn: both sticks out, rolled"},
-	{"Rear touch panel", "Right mouse button (click, drag); hold Alt first while the mouse looks; a touchscreen: touch with R1 held", "Touchpad with R1 held; or hold R1: a stick + Cross / L2 / R2 (both sticks: two fingers)"},
-	{"Motion sensor (tilt, aim)", "--", "Gyro (DS4/DualSense); R3 recentres"},
-	{"A PS TV layout's L2 / R2 / L3 / R3 (controller only)", "--", "L1 / R1 / L3 / R3"},
-};
-/* the pad column with "shoulder_buttons" = bumpers (the bumpers are L and R, the triggers hold the touch cursor) */
-static const char *const ctrl_rows_swapped[][2] = {
-	{"L / R", "L1 / R1 (Xbox: LB / RB)"},
-	{"Front touch panel", "Touchpad; or hold L2: a stick + Cross / L1 / R1 (both sticks: two fingers); a two-finger turn: both sticks out, rolled"},
-	{"Rear touch panel", "Touchpad with R2 held; or hold R2: a stick + Cross / L1 / R1 (both sticks: two fingers)"},
-	{"A PS TV layout's L2 / R2 / L3 / R3 (controller only)", "L2 / R2 / L3 / R3"},
-};
-extern int display_pstv_looked(void);
-int window_controls_count(void) { return (int)(sizeof ctrl_rows / sizeof ctrl_rows[0]) - !display_pstv_looked(); }   /* (the last row: a PS TV layout's, only in a game that has one) */
-void window_controls_row(int i, const char **action, const char **key, const char **pad) {
-	if (i < 0 || i >= window_controls_count()) { *action = *key = *pad = ""; return; }
-	*action = ctrl_rows[i][0]; *key = ctrl_rows[i][1]; *pad = ctrl_rows[i][2];
-	if (shoulders_swapped) for (size_t j = 0; j < sizeof ctrl_rows_swapped / sizeof ctrl_rows_swapped[0]; j++) if (!strcmp(*action, ctrl_rows_swapped[j][0])) *pad = ctrl_rows_swapped[j][1];
-}
 int window_touch(int *x, int *y) { *x = touch_x; *y = touch_y; return touch_down; }
+/* ---- the game's own menus by the pad and the keyboard (menunav.h). A game hook says each frame which of its touchable
+ * buttons a menu has on screen; here the D-pad or the arrows move a highlight among them (the nearest one that way),
+ * Cross / A or the Cross key (Space) touches the one it is on, Circle / B or Escape / Backspace touches the menu's way
+ * back; on a strip that swipes (a carousel: Uncharted's main and pause menus) left and right swipe it instead. The touch
+ * is the mouse's own front-panel touch, made for a moment: a tap held 0.12 s (several of the game's frames), a swipe
+ * dragged 0.26 s and let go still moving (Uncharted takes a touch of two of its frames for a tap, however far it went,
+ * and a drag that stops before it lifts for a nudge that springs back). With no menu on screen the keys and the pad are
+ * the game's as ever. */
+static SDL_SpinLock menu_lock; static MenuItem menu_items[MENU_MAX]; static int menu_n; static uint64_t menu_us;
+void window_menu_items(const MenuItem *items, int n) {
+	if (n > MENU_MAX) n = MENU_MAX;
+	SDL_LockSpinlock(&menu_lock);
+	menu_n = items ? n : 0; if (menu_n) memcpy(menu_items, items, sizeof *items * (size_t)menu_n); menu_us = now_us();
+	SDL_UnlockSpinlock(&menu_lock);
+}
+static int menu_snapshot(MenuItem *out) {   /* the menu now: none once the game stops saying (a quarter second) */
+	SDL_LockSpinlock(&menu_lock);
+	const int n = now_us() - menu_us < 250000 ? menu_n : 0; if (n) memcpy(out, menu_items, sizeof *out * (size_t)n);
+	SDL_UnlockSpinlock(&menu_lock);
+	return n;
+}
+static uint32_t menu_focus;   /* the button the highlight is on (its widget); 0 none yet */
+static int menu_shown;        /* the highlight shows from the first press in a menu */
+static struct { int on; uint64_t t0; float x0, y0, x1, y1; uint64_t us, hold; } menu_touch;   /* a tap or a swipe being made */
+static int menu_at(const MenuItem *it, int n, uint32_t id) { for (int i = 0; i < n; i++) if (it[i].id == id) return i; return -1; }
+static int menu_default(const MenuItem *it, int n) {   /* a carousel, else the button nearest the middle */
+	int best = -1; float bd = 1e9f;
+	for (int i = 0; i < n; i++) {
+		if (it[i].kind == MENU_CAROUSEL) return i;
+		if (it[i].kind == MENU_PART) continue;
+		const float dx = it[i].x + it[i].w * 0.5f - 480, dy = it[i].y + it[i].h * 0.5f - 272, d = dx * dx + dy * dy;
+		if (d < bd) { bd = d; best = i; }
+	}
+	return best;
+}
+static void menu_touch_start(float x0, float y0, float x1, float y1, uint64_t us, uint64_t hold) {
+	menu_touch.on = 1; menu_touch.t0 = now_us(); menu_touch.us = us; menu_touch.hold = hold;
+	menu_touch.x0 = x0; menu_touch.y0 = y0; menu_touch.x1 = x1; menu_touch.y1 = y1;
+}
+static void menu_tap(const MenuItem *t) { const float cx = t->x + t->w * 0.5f, cy = t->y + t->h * 0.5f; menu_touch_start(cx, cy, cx, cy, 120000, 40000); }
+/* the touch being made, this frame: down along its path, then up -- a tap held still a moment, a swipe let go while still
+ * moving (a carousel turns to the next one on a quick flick; a slow drag that stops only nudges it and it springs back) */
+static void menu_tick(void) {
+	if (!menu_touch.on) return;
+	const uint64_t t = now_us() - menu_touch.t0;
+	if (t >= menu_touch.us + menu_touch.hold) { menu_touch.on = 0; touch_down = 0; return; }
+	const float f = t >= menu_touch.us ? 1.0f : (float)t / (float)menu_touch.us;
+	touch_x = (int)(2.0f * (menu_touch.x0 + (menu_touch.x1 - menu_touch.x0) * f));
+	touch_y = (int)(2.0f * (menu_touch.y0 + (menu_touch.y1 - menu_touch.y0) * f));
+	touch_down = 1;
+}
+/* an event a menu takes (1), or the game's (0) */
+static int menu_event(const SDL_Event *e) {
+	enum { NONE, UP, DOWN, LEFT, RIGHT, OK, BACK };
+	int act = NONE, release = 0;
+	if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+		const int b = e->gbutton.button;
+		act = b == SDL_GAMEPAD_BUTTON_DPAD_UP ? UP : b == SDL_GAMEPAD_BUTTON_DPAD_DOWN ? DOWN : b == SDL_GAMEPAD_BUTTON_DPAD_LEFT ? LEFT
+		    : b == SDL_GAMEPAD_BUTTON_DPAD_RIGHT ? RIGHT : b == SDL_GAMEPAD_BUTTON_SOUTH && !cur_mode ? OK : b == SDL_GAMEPAD_BUTTON_EAST ? BACK : NONE;
+		release = e->type == SDL_EVENT_GAMEPAD_BUTTON_UP;
+	} else if ((e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) || e->type == SDL_EVENT_KEY_UP) {
+		const SDL_Keycode k = e->key.key;
+		int cross = 0; for (int i = 0; i < KB_N; i++) if (kb_binds[i].bit == CROSS && kb_binds[i].kc == k) cross = 1;
+		act = k == SDLK_UP ? UP : k == SDLK_DOWN ? DOWN : k == SDLK_LEFT ? LEFT : k == SDLK_RIGHT ? RIGHT
+		    : cross || k == SDLK_SPACE ? OK : k == SDLK_ESCAPE || k == SDLK_BACKSPACE ? BACK : NONE;
+		release = e->type == SDL_EVENT_KEY_UP;
+	}
+	if (act == NONE || overlay_is_open() || overlay_dialog_active()) return 0;
+	MenuItem it[MENU_MAX]; const int n = menu_snapshot(it);
+	if (!n) { menu_shown = 0; return 0; }
+	int back = -1; for (int i = 0; i < n; i++) if (it[i].kind == MENU_BACK) back = i;
+	if (act == BACK && back < 0) return 0;   /* no way back on screen: Circle stays the game's */
+	if (release || menu_touch.on) return 1;  /* (a release, or a press while a touch is still being made: taken, nothing more) */
+	int f = menu_at(it, n, menu_focus);
+	if (f < 0 || it[f].kind == MENU_PART) { f = menu_default(it, n); menu_focus = f >= 0 ? it[f].id : 0; }
+	if (f < 0) return 0;
+	const MenuItem *t = &it[f];
+	const float cx = t->x + t->w * 0.5f, cy = t->y + t->h * 0.5f;
+	if (act == OK) { menu_tap(t); menu_shown = 0; }   /* (the mark goes with the touch: a load or the next page may follow) */
+	else if (act == BACK) { menu_tap(&it[back]); menu_shown = 0; }
+	else if (!menu_shown && t->kind != MENU_CAROUSEL) menu_shown = 1;   /* the first press shows where the mark is (a carousel has none: it acts at once) */
+	else if (t->kind == MENU_CAROUSEL && (act == LEFT || act == RIGHT)) {
+		/* how far: past half the item in the middle (the button over the strip's middle; a long one -- Uncharted's pause
+		 * menu's "Restart from checkpoint" -- needs a longer swipe than the main menu's), and never under 180 either way */
+		float item = 0;
+		for (int i = 0; i < n; i++) if (i != f && it[i].x <= cx && it[i].x + it[i].w >= cx && it[i].y < t->y + t->h && it[i].y + it[i].h > t->y && it[i].w < t->w) item = it[i].w;
+		const float d = fminf(fmaxf(180.0f, item * 0.6f), t->w * 0.45f) * (act == RIGHT ? 1.0f : -1.0f);   /* the next one to the right: swipe the strip left */
+		menu_touch_start(cx + d, cy, cx - d, cy, 260000, 0);
+	} else {   /* the nearest button that way: its distance along the way, its offset across it counted twice */
+		int best = -1; float bs = 1e9f;
+		for (int i = 0; i < n; i++) {
+			if (i == f || it[i].kind == MENU_PART) continue;
+			const float dx = it[i].x + it[i].w * 0.5f - cx, dy = it[i].y + it[i].h * 0.5f - cy;
+			const float along = act == RIGHT ? dx : act == LEFT ? -dx : act == DOWN ? dy : -dy, across = act == LEFT || act == RIGHT ? fabsf(dy) : fabsf(dx);
+			if (along <= 1.0f) continue;
+			const float s = along + 2.0f * across;
+			if (s < bs) { bs = s; best = i; }
+		}
+		if (best >= 0) menu_focus = it[best].id;
+	}
+	return 1;
+}
+/* the highlight's frame for the overlay (window points), or none */
+static void menu_highlight(void) {
+	MenuItem it[MENU_MAX]; const int n = menu_snapshot(it);
+	if (!n) menu_shown = 0;
+	const int f = n && menu_shown && !overlay_is_open() ? menu_at(it, n, menu_focus) : -1;
+	/* (a carousel shows its own choice, the middle one lit; the whole screen has nothing to frame) */
+	if (f < 0 || it[f].kind == MENU_CAROUSEL || it[f].kind == MENU_SCREEN) { overlay_menu_focus(NULL); return; }
+	float x0, y0, x1, y1;
+	touch_to_point((int)(2 * it[f].x), (int)(2 * it[f].y), &x0, &y0);
+	touch_to_point((int)(2 * (it[f].x + it[f].w)), (int)(2 * (it[f].y + it[f].h)), &x1, &y1);
+	const float r[4] = {x0, y0, x1 - x0, y1 - y0};
+	overlay_menu_focus(r);
+}
 /* A game hook's word that the game wants a front-panel swipe now (Killzone: a brutal melee / interrogation gesture window):
  * with the mouse captured (keyboard + mouse), the left button then drags a touch instead of firing -- from the panel's
  * centre, moved by the mouse's motion -- so a quick drag lands inside the window. Without it a swipe meant Alt for the
@@ -538,7 +650,7 @@ static int av_auto_delay(int port) {
 void audio_output(int dev, const void *buf, uint32_t bytes) {
 	if (dev < 1 || dev > nstreams) return;
 	SDL_AudioStream *s = streams[dev - 1];
-	/* the overlay is open, or the menu bar's Game > Pause is on: the game is paused (display.c's vblank
+	/* the overlay is open (the menu, a card, the touch card): the game is paused (display.c's vblank
 	 * wait parks it; see that file's comment), but a buffer already queued before the pause would
 	 * otherwise keep playing out -- drop this one and clear what's left so the pause is silent at
 	 * once, not a fraction of a second late */
@@ -767,7 +879,7 @@ static void overlay_dump_maybe(uint32_t base, uint32_t w, uint32_t h, uint32_t p
 		if (dst) { memcpy(dst, tmp, 4u * w * h); SDL_UnmapGPUTransferBuffer(gpu, up); }
 		/* three command buffers in order: the frame's upload; the overlay's own (overlay_render_forced
 		 * submits one per frame it draws -- the ImGui backend's buffers are per frame; the closed-state
-		 * modes draw the HUD, RECOMP_OSD's lines, under the bar in that same frame, as the live path does);
+		 * modes draw the HUD, RECOMP_OSD's lines, in that same frame, as the live path does);
 		 * the download. The device runs them in submission order. */
 		SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(gpu);
 		SDL_GPUCopyPass *cp = SDL_BeginGPUCopyPass(cmd);
@@ -872,7 +984,7 @@ static int kbm_pstv_said;
 static void kbm_used(void) {
 	if (kbm_pstv_said || !display_pstv_active()) return;
 	kbm_pstv_said = 1;
-	overlay_toast_titled("Controller layout", "The PS TV layout is for a controller: keyboard and mouse don't play the game in it. For them, choose touch controls when the game starts (or [F1] > Game > Controller layout).", 10.0);
+	overlay_toast_titled("Controller layout", "The PS TV layout is for a controller: keyboard and mouse don't play the game in it. For them, choose touch controls when the game starts (or [F1] > Controls > Mouse and controller).", 10.0);
 }
 static void pad_resync(SDL_Gamepad *pad) {   /* L and R as held now (the menu closing): no event says so */
 	for (int k = 0; k < 2; k++) {
@@ -993,38 +1105,39 @@ void window_run(void *(*fn)(void *), void *arg) {
 			/* the overlay itself: always live, open or not, so it can always be reached and always
 			 * closed. Opening (or re-opening by the same gamepad combo) clears whatever buttons/touch
 			 * were down so the game never sees them as still held on resume. */
-			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
-			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) { if (overlay_is_open()) overlay_close(); else overlay_bar_dismiss(); }   /* (closed: Escape hides the menu bar and its menus) */
-			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE) { overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1) { fprintf(stderr, "    menu: F1\n"); overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) { if (overlay_is_open()) overlay_escape(); else overlay_bar_dismiss(); }   /* (open: the menu takes it below, as a step back) */
+			/* (some pads send Guide for Select+Start too, right after the two: it would close what the combo just opened) */
+			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE && !(pad_back && pad_start)) { fprintf(stderr, "    menu: the pad's Guide button\n"); overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) pad_back = 1;
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_UP && e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) { pad_back = 0; pad_combo_latch = 0; }
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_START) pad_start = 1;
 			if (e.type == SDL_EVENT_GAMEPAD_BUTTON_UP && e.gbutton.button == SDL_GAMEPAD_BUTTON_START) { pad_start = 0; pad_combo_latch = 0; }
-			if (pad_back && pad_start && !pad_combo_latch) { pad_combo_latch = 1; overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
+			if (pad_back && pad_start && !pad_combo_latch) { pad_combo_latch = 1; fprintf(stderr, "    menu: Select+Start\n"); overlay_toggle(); if (overlay_is_open()) { buttons = 0; touch_down = 0; gamepad_touch_release(); } }
 			/* exclusive while open: the menu gets every key/mouse/gamepad event instead of the game
 			 * (which is paused anyway -- display.c) */
 			if (overlay_is_open()) { overlay_process_event(&e); continue; }
 			/* the save-data dialog waiting on the player (overlay_dialog_active): it has the keys and the mouse;
 			 * the game is polling the dialog, not the pad */
 			if (overlay_dialog_active()) { overlay_process_event(&e); continue; }
-			/* closed: ImGui still sees the mouse (and the window's focus/enter/leave), so the menu bar can
-			 * show on a hover at the top edge; a press or a move it has claimed (the pointer over the bar,
-			 * a menu or the pull tab, as of the last frame drawn) never becomes a touch below. A release
-			 * always falls through: letting a touch go is never wrong, and a click that began on the
-			 * picture then dragged onto the bar ends as the game's (ImGui doesn't claim a drag that began
-			 * outside it: its MouseDownOwned). Keys and the pad stay the game's -- the bar is pointer-only. */
+			/* closed: ImGui still sees the mouse (and the window's focus/enter/leave); a press or a move it has
+			 * claimed (the pointer over something of its own, as of the last frame drawn) never becomes a touch
+			 * below. A release always falls through: letting a touch go is never wrong (ImGui doesn't claim a
+			 * drag that began outside it: its MouseDownOwned). Keys and the pad stay the game's. */
 			if (e.type == SDL_EVENT_MOUSE_MOTION || e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP || e.type == SDL_EVENT_MOUSE_WHEEL ||
 			    e.type == SDL_EVENT_WINDOW_MOUSE_ENTER || e.type == SDL_EVENT_WINDOW_MOUSE_LEAVE || e.type == SDL_EVENT_WINDOW_FOCUS_GAINED || e.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
 				overlay_process_event(&e);
 				if (overlay_mouse_captured() && e.type != SDL_EVENT_MOUSE_BUTTON_UP) continue;
 			}
 			/* a touchscreen's fingers (screen_finger). SDL also makes the first finger the mouse (which == SDL_TOUCH_MOUSEID):
-			 * that stops here, after the menu bar has seen it, so a tap never fires, looks, captures the mouse or switches
+			 * that stops here, after ImGui has seen it, so a tap never fires, looks, captures the mouse or switches
 			 * the input to keyboard + mouse */
 			if (e.type == SDL_EVENT_FINGER_DOWN || e.type == SDL_EVENT_FINGER_MOTION || e.type == SDL_EVENT_FINGER_UP || e.type == SDL_EVENT_FINGER_CANCELED) { screen_finger(&e); continue; }
 			if ((e.type == SDL_EVENT_MOUSE_MOTION && e.motion.which == SDL_TOUCH_MOUSEID) || ((e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) && e.button.which == SDL_TOUCH_MOUSEID)) continue;
+			if (menu_event(&e)) continue;   /* a game menu on screen: the D-pad, the arrows, Cross and Circle move and touch in it */
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F12) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (F12)\n"); }
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F10) metrics_osd_cycle();
+			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F11) window_set_fullscreen(!settings_int("fullscreen", 0));   /* as the launcher's Window mode row says */
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F5) {   /* a marker in the log: "that just happened" for a bug report (a doubled voice line, a glitch) */
 				static int n; n++; extern uint64_t display_frames(void);
 				fprintf(stderr, "user mark %d at frame %llu\n", n, (unsigned long long)display_frames());
@@ -1032,10 +1145,10 @@ void window_run(void *(*fn)(void *), void *arg) {
 				char b[48]; snprintf(b, sizeof b, "Mark %d at frame %llu", n, (unsigned long long)display_frames()); overlay_toast_titled("Marked in the log", b, 2.0);
 			}
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F6) {   /* a VERIFY build's 60/30 A/B capture (verify.c sets window_f6) */
-				if (window_f6) window_f6(); else fprintf(stderr, "F6: the A/B capture needs the verify build (vitarecomp build <title> verify)\n");
+				if (window_f6) window_f6(); else fprintf(stderr, "F6: the A/B capture needs a verify build\n");
 			}
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F9) {   /* a VERIFY build's hand-held count window (verify.c sets window_f9) */
-				if (window_f9) window_f9(); else fprintf(stderr, "F9: count windows need the verify build (vitarecomp build <title> verify)\n");
+				if (window_f9) window_f9(); else fprintf(stderr, "F9: count windows need a verify build\n");
 			}
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F8) raw_look_toggle();   /* the experimental raw mouse look (hooks.c) */
 			if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F4) { extern void gfx_gpu_fsr_toggle(void); gfx_gpu_fsr_toggle(); }   /* FSR 3.1 anti-aliasing off and on, live (RECOMP_FSR: gfx_gpu.c) */
@@ -1162,7 +1275,8 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (on && pstv) { kbm_used(); on = 0; }
 			static int said;
 			if (on != kbm_on) { extern uint64_t display_frames(void); fprintf(stderr, "    input: %s (%s%s, frame %llu)\n", on ? "keyboard and mouse" : "the controller", strcmp(mode, "auto") ? "Play with: " : "", strcmp(mode, "auto") ? mode : kbm_why[0] ? kbm_why : "start", (unsigned long long)display_frames()); }
-			if (on && !kbm_on && !said) { said = 1; overlay_toast_titled("Keyboard & mouse", "The mouse looks and aims -- hold [Alt] for the cursor\nControls: [F1]", 6.0); }
+			if (on && !kbm_on && !said) { said = 1; overlay_toast_titled(game_text(GT_T_KBM), game_text(GT_KBM_HINT), 6.0); }
+			if (on != kbm_on) __atomic_add_fetch(&glyph_gen, 1, __ATOMIC_RELAXED);   /* the game's button glyphs: keys or the console's */
 			kbm_on = on;
 			int want = (on || (window_raw_look() && !pstv)) && settings_int("mouse_look", 1) && !overlay_is_open() && !overlay_dialog_active() && win && (SDL_GetWindowFlags(win) & SDL_WINDOW_INPUT_FOCUS) && !(SDL_GetModState() & SDL_KMOD_ALT);
 			/* SDL's own state, not just ours: the system can drop the capture behind our back (a focus change as
@@ -1194,6 +1308,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 				rel_on = want;
 			}
 			tilt_section_update();
+			touch_prompt_update();
 			if (dt > 0) {   /* the motion sensor's source, and the virtual pad's tilt */
 				/* keyboard + mouse, or a pad without a gyro: the virtual pad; a pad with one in hand: its gyro. A change
 				 * mid-section glides (motion.c) and the virtual tilt carries on from the angle the game was reading. */
@@ -1277,7 +1392,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			} else twist_pad = 0;
 			twist_down = twist_pad || twist_drag;
 			static int was, shown;   /* the prompt, the first few valves of a session */
-			if (w && !was && shown < 3) { shown++; overlay_toast_titled("Two-finger turn", kbm_on ? "Hold the left button and drag down / up" : "Push both sticks out and roll them", 4.0); }
+			if (w && !was && shown < 3) { shown++; overlay_toast_titled(game_text(GT_T_TWIST), game_text(kbm_on ? GT_TWIST_KBM : GT_TWIST_PAD), 4.0); }
 			if (!w && was) fprintf(stderr, "    touch twist: the game stopped asking for it\n");
 			was = w;
 		}
@@ -1290,7 +1405,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			if (inflight < 16) busy_since = 0; else if (!busy_since) busy_since = t;
 			static int burst; if (t - win_t >= 500000) { burst = total_ms - win_total > 150; win_t = t; win_total = total_ms; }
 			if (wait_ms > 300 || burst || (busy_since && t - busy_since > 1000000))
-				overlay_toast_titled("Compiling shaders", "Building this area's graphics for the first time", 0.6);
+				overlay_toast_titled(game_text(GT_T_COMPILING), game_text(GT_COMPILING), 0.6);
 		}
 		{	/* the bumper cursor: either stick moves it (both add up), full deflection crossing the panel's
 			 * width in about 1.3 s times the "touch_cursor_speed" setting; a small deadzone each keeps it still at rest */
@@ -1359,7 +1474,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 			}
 			was_open = open;
 		}
-		if (overlay_wants_quit()) { extern void host_summary(const char *why); extern void gfx_gpu_quit(void); host_summary("window closed"); gfx_gpu_quit(); _exit(0); }
+		{ const int quit = overlay_wants_quit(); if (quit) { extern void host_summary(const char *why); extern void gfx_gpu_quit(void); host_summary("window closed"); gfx_gpu_quit(); _exit(quit == 2 ? 3 : 0); } }   /* (3: the launcher that started it closes too) */
 		if (overlay_wants_capture()) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (overlay)\n"); }
 
 
@@ -1460,6 +1575,7 @@ void window_run(void *(*fn)(void *), void *arg) {
 				float px, py; SDL_GetMouseState(&px, &py);
 				mt = mouse_to_touch(px, py, 0, &mtx, &mty);
 			}
+			menu_tick(); menu_highlight();
 			overlay_touch_cursor(mt);
 			overlay_frame(cmd, swap, ww, wh, dt);
 			/* the gamepad-touch markers: the bumper cursor, the touchpad's fingers, a right-button rear
@@ -1507,7 +1623,5 @@ void window_run(void *(*fn)(void *), void *arg) {
 		}
 		metrics_window_frame((t_blit1 - t_blit0) + (t_blit3 - t_blit2));   /* upload + blit/submit; (t_blit2 - t_blit1) is the vsync wait, excluded */
 
-		char title[160];
-		if (metrics_title(title, sizeof title)) SDL_SetWindowTitle(win, title);
 	}
 }

@@ -14,13 +14,17 @@ The setting `input_mode` is `auto` by default: the scheme follows the device use
 switches to keyboard and mouse; a controller button or stick switches back to the controller. `pad` and `kbm`
 fix one of the two.
 
+With keyboard and mouse in use, the game's button prompts show the key or the mouse button that plays each action
+(Space, Shift, the mouse's right button...), as they are set on the Controls page; with a controller, the console's
+symbols come back.
+
 ## Keyboard (defaults)
 
 | Action | Key |
 |---|---|
 | Move (left stick) | W, A, S, D |
 | Cross | Space |
-| Circle | C |
+| Circle (cover, roll, drop) | Left Shift (as in Uncharted on PC) |
 | Square | F |
 | Triangle | E |
 | L (aim) | Q |
@@ -47,7 +51,8 @@ set to.
 
 Holding **Alt** frees the cursor. The cursor is then a finger: the left button touches the front screen, the
 right button touches the rear pad. This is how the game's touch actions are done: tapping an icon, rubbing a
-charcoal sketch, drawing a machete cut, swiping to climb.
+charcoal sketch, drawing a machete cut, swiping to climb. When the game waits for a touch, a note at the top right
+says how to give it with the device in use (the first three times in a session).
 
 Shapes drawn with the mouse are accepted a little more easily than a finger's (a recogniser score of 0.7
 instead of 0.8).
@@ -63,15 +68,25 @@ The console steers these by tilting. On a PC:
 ## Controller
 
 Controllers are recognised by SDL: Xbox, PlayStation, Switch and most others map by themselves. The setting
-`shoulder_buttons` chooses whether L and R are the triggers (default) or the bumpers.
+`shoulder_buttons` chooses whether L and R are the triggers (default) or the bumpers. The in-game menu opens with the
+PS / Xbox button or with Select and Start together.
+
+## The game's menus
+
+On the console the game's menus (the title, the main and pause menus, the options, the journal, the popups) are touch
+only. Here the D-pad or the arrow keys move to the next button that way, with a short line under it; Cross / A or
+Space presses it; Circle / B, Esc or Backspace takes the menu's way back when it has one. On the main and pause menus'
+strips left and right turn to the next entry. Each is a touch made for you, so the mouse and the touch cursor still
+work as well. With no menu on screen the keys and buttons play the game.
 
 ## Function keys
 
 | Key | What it does |
 |---|---|
 | F1 | Opens and closes the in-game menu (settings, controls) |
-| Esc | Closes the menu, or hides the menu bar |
+| Esc | Steps back in the menu, page by page, and closes it |
 | F10 | Cycles the performance display |
+| F11 | Window or full screen |
 | F2 | Cycles the internal resolution, 1x to 6x |
 | F4 | Turns FSR anti-aliasing off and on |
 | F5 | Writes a marker in the log, for a bug report |

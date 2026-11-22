@@ -3,8 +3,8 @@
 
   python tools/make_game.py <game folder> <firmware update file> [--library <folder>]
 
-  <game folder>            your copy of Uncharted: Golden Abyss, US release PCSA00029 version 1.00: ux0:app/PCSA00029
-                           copied off the Vita, with its licence (sce_sys/package/work.bin)
+  <game folder>            your copy of Uncharted: Golden Abyss version 1.00, the US release (ux0:app/PCSA00029) or the
+                           European one (ux0:app/PCSF00012), copied off the Vita with its licence (sce_sys/package/work.bin)
   <firmware update file>   Sony's PS Vita firmware update file (PSVUPDAT.PUP, 3.74): the graphics library the game
                            uses comes from it
   --library                where everything made goes (default: game/library, which git ignores)
@@ -112,8 +112,8 @@ def main():
     digest = sha256(main_elf)
     known = {v["sha256"]: name for name, v in pack["versions"].items()}
     if digest not in known:
-        die(f"this copy's {pack['ELF']} is not version {', '.join(pack['versions'])} of the US release: another version or region, "
-            "or a modified dump. The game's patches are made for that build's addresses and would not fit.")
+        die(f"this copy's {pack['ELF']} is not version {', '.join(pack['versions'])} (the US and European releases share it): "
+            "another version, or a modified dump. The game's patches are made for that build's addresses and would not fit.")
     with open(os.path.join(W, "version"), "w", newline="\n") as f: f.write(known[digest] + "\n")
     link_dir(app0, os.path.join(OUT, "fs", "app0"))
 

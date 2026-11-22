@@ -1,0 +1,33 @@
+/* The runtime's own cards over the game (the save-data dialog, apputil.c; the quit card, overlay.cpp) in the
+ * launcher's language: the table is launcher.cpp's, with the launcher's other words. */
+#pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+enum GameText {
+	GT_SAVE, GT_LOAD, GT_DELETE,
+	GT_ASK_SAVE, GT_ASK_LOAD, GT_ASK_DELETE,
+	GT_SAVING_POWER, GT_LOADING, GT_WAIT,
+	GT_SAVED, GT_LOADED, GT_DELETED,
+	GT_CANCEL_SAVE, GT_CANCEL_LOAD, GT_CANCEL_DELETE,
+	GT_NO_DATA, GT_OVERWRITE, GT_CORRUPTED, GT_NO_SPACE, GT_NO_USABLE,
+	GT_ERROR,   /* (one %08X) */
+	GT_SAVING,
+	GT_NEW_DATA, GT_DATA_N /* (one %u) */, GT_SAVED_DATA, GT_EMPTY,
+	GT_LIST_HINT, GT_YESNO_HINT, GT_BACK, GT_YES, GT_NO, GT_CONTINUE,
+	GT_QUIT /* (one %s) */, GT_THE_GAME, GT_QUIT_LOST, GT_KEEP_PLAYING, GT_QUIT_GAME, GT_BACK_LAUNCHER,
+	/* the toasts and the touch and shader cards (window.c, overlay.cpp, camera.c, gfx_gpu.c, apputil.c) */
+	GT_T_MENU, GT_MENU_HINT, GT_T_BALANCE, GT_T_SLIDE, GT_BAL_KEYS, GT_SLIDE_KEYS, GT_BAL_STICK, GT_SLIDE_STICK,
+	GT_BAL_GYRO, GT_SLIDE_GYRO, GT_T_SHADERS_READY, GT_SHADERS_READY, GT_T_COMPILING, GT_COMPILING, GT_T_TOUCH, GT_TOUCH_KBM,
+	GT_TOUCH_PAD_L2, GT_TOUCH_PAD_L1, GT_T_MOUSE_AIM, GT_AIM_DIRECT, GT_AIM_STICK, GT_T_KBM, GT_KBM_HINT, GT_T_TWIST,
+	GT_TWIST_KBM, GT_TWIST_PAD, GT_FSR_ON, GT_FSR_OFF, GT_T_CAMERA, GT_CAM_LAMP_ON, GT_CAM_LAMP_OFF, GT_CAM_PC,
+	GT_CAM_LAMP, GT_CAM_DARK, GT_T_ONLINE, GT_ONLINE, GT_I_TITLE, GT_I_DONE, GT_I_LEAD, GT_I_KBM_NAME,
+	GT_I_KBM, GT_I_PAD_NAME, GT_I_PAD, GT_I_TOUCHPAD, GT_I_TOUCH_NAME, GT_I_TOUCH, GT_I_TRY, GT_I_BACK,
+	GT_I_FOOT, GT_P_CORNER, GT_P_TITLE, GT_P_BODY, GT_P_OF, GT_P_ETA_UNKNOWN, GT_P_ETA_LT1, GT_P_ETA_1,
+	GT_P_ETA_N, GT_P_SKIP, GT_P_SKIP_NOTE,
+	GT_COUNT
+};
+const char *game_text(int id);
+#ifdef __cplusplus
+}
+#endif

@@ -1,0 +1,74 @@
+# Builds the Windows package on every push to main or develop and on pull requests. A tag vX.Y.Z (matching the
+# version in CMakeLists.txt, with a section in CHANGELOG.md) makes it a draft GitHub release with its SHA256SUMS and
+# notes, published by hand once its files are checked (VirusTotal); any other run keeps the package as an artifact, so
+# a broken build shows up before a release. No copy of the game is here: the launcher and the runtime are built, which
+# is all the package carries; abyss.exe and its test need the game and are left out (CMakeLists.txt).
+name: Release
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Before the build: a tag that does not match the version, or a version without its CHANGELOG section, fails in
+      # seconds instead of after the package is made. The notes are that section.
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(abyssport VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          if ("${{ github.ref_name }}" -ne "v$version") { throw "tag ${{ github.ref_name }} but CMakeLists.txt says $version" }
+          $log = Get-Content CHANGELOG.md
+          $start = ($log | Select-String -Pattern "^## $([regex]::Escape($version))\b" | Select-Object -First 1).LineNumber
+          if (-not $start) { throw "CHANGELOG.md has no section for $version" }
+          $rest = $log | Select-Object -Skip $start
+          $next = ($rest | Select-String -Pattern '^## ' | Select-Object -First 1).LineNumber
+          if ($next) { $rest = $rest | Select-Object -First ($next - 1) }
+          Set-Content notes.md $rest
+
+      # llvm-mingw and Ninja into toolchain/, pinned by version and SHA-256.
+      - name: Fetch the compiler
+        run: python tools/get_toolchain.py
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --preset pc-x64
+          if ($LASTEXITCODE) { throw "configure failed" }
+          cmake --build --preset pc-x64-release
+          if ($LASTEXITCODE) { throw "build failed" }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          python tools/make_package.py
+          if ($LASTEXITCODE) { throw "packaging failed" }
+          $zip = Get-ChildItem dist -Filter *.zip -File
+          "$((Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLower())  $($zip.Name)" | Set-Content dist/SHA256SUMS
+
+      - name: Make the draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" (Get-ChildItem dist -File).FullName --title "abyssport ${{ github.ref_name }}" --notes-file notes.md --draft
+
+      - name: Keep the package
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: abyssport-windows
+          path: dist/*.zip

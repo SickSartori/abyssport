@@ -54,18 +54,14 @@ int overlay_layout_ask(void);
 void overlay_open(void);
 void overlay_close(void);
 void overlay_toggle(void);
-/* Game > Pause in the menu bar: the game held without the menu (a banner says so). overlay_game_paused
- * is the one flag display.c and window.c's audio poll: the full menu open OR this pause. Closing the
- * full menu (Resume, Escape, F1) clears this pause too. */
-void overlay_set_paused(int on);
+/* Escape with the menu open: a card closes; the menu (the launcher's pages) takes it itself, as a step back */
+void overlay_escape(void);
+/* the one flag display.c and window.c's audio poll: the menu or a card is up, or the touch card holds the game */
 int overlay_game_paused(void);
 
-/* the menu bar (overlay.cpp's own header comment): drawn by overlay_marks while the full menu is closed,
- * from the mouse events window.c forwards to overlay_process_event at all times. overlay_mouse_captured:
- * ImGui wants the pointer (over the bar, one of its menus, or the pull tab) as of the last frame drawn --
- * window.c checks it before a mouse button or motion becomes a touch, so clicks and drags on the bar
- * never reach the game. overlay_bar_dismiss (Escape while the full menu is closed): closes any open bar
- * menu and hides the bar. */
+/* overlay_mouse_captured: ImGui wants the pointer (over a card or the save dialog) as of the last frame drawn -- window.c
+ * checks it before a mouse button or motion becomes a touch. overlay_bar_dismiss (Escape with the menu closed): the
+ * touch card skipped. */
 int overlay_mouse_captured(void);
 void overlay_bar_dismiss(void);
 
@@ -78,7 +74,7 @@ int overlay_wants_capture(void);
 /* interactive mode only (window != NULL at overlay_init): forwards one SDL event to ImGui. A no-op,
  * cheaply, when the overlay wasn't initialised with a window (headless) or ImGui isn't capturing.
  * window.c forwards every event while the full menu is open, and only mouse and window events while
- * it's closed (the bar is pointer-only; the keys and the pad stay the game's). */
+ * it's closed (the keys and the pad stay the game's). */
 void overlay_process_event(const SDL_Event *event);
 
 /* builds one ImGui frame (the pages below) and renders it into `target`, sized w x h pixels, with
@@ -95,6 +91,9 @@ void overlay_frame(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w
  * the rear panel's rows while rear touch is in play. Drawn like overlay_frame (LOAD, after the blit);
  * a no-op with nothing to show or the menu open. */
 typedef struct { float x, y; int rear, pressed, cursor; } OverlayMark;
+/* the game menu's button the pad and the arrows are on (window.c's menu navigation, menunav.h): x, y, w, h in window
+ * points, drawn as a frame with the marks; NULL or w 0 none */
+void overlay_menu_focus(const float rect[4]);
 /* window.c: the free pointer is a touch cursor this frame (drawn as a mark): the OS arrow is hidden over the picture */
 void overlay_touch_cursor(int on);
 void overlay_marks(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w, uint32_t h, double dt_s, const OverlayMark *marks, int n, const float rear_rect[4]);
@@ -102,8 +101,8 @@ void overlay_marks(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w
  * on: the HUD. overlay_draws_hud says whether it will (ImGui up, with a window), so window.c can skip the
  * CPU composite of the same overlay into the frame -- on the GPU path a fence wait + download + re-upload
  * of every frame (window_present_gpu's own comment). RECOMP_OSD_CPU=1 (window.c) keeps that composite.
- * Windowed, overlay_marks builds a frame every present whether or not anything shows: the menu bar's
- * hover and timers, the idle cursor and overlay_mouse_captured live in it (a frame that draws nothing
+ * Windowed, overlay_marks builds a frame every present whether or not anything shows: the toasts' timers,
+ * the idle cursor and overlay_mouse_captured live in it (a frame that draws nothing
  * costs no render pass). */
 int overlay_draws_hud(void);
 
@@ -112,11 +111,10 @@ int overlay_draws_hud(void);
  * overlay.cpp for why it must never touch open/close state. Acquires and submits its own command
  * buffer(s) on `device` (one per drawn frame: the backend's buffers are per frame), so the caller
  * submits whatever wrote `target` before this and records anything that reads it after. `ui` is one
- * entry of RECOMP_OVERLAY_DUMP_UI (window.c): NULL or "menu" the full menu (the default), "menu:<tab>"
- * the full menu on that page (Display, Performance, Game, Controls, Help); "bar" the menu bar slid
- * down; "Game", "View", "Controls" or "Help" the bar with that menu open; "toast" the first-launch
- * hint with the pull tab; "intro", "intro:pad" or "intro:touch" the touch card with that device
- * highlighted, and after it "@<seconds>" that moment of its demonstration's loop; "quit" the quit card; "layout" the layout card. */
+ * entry of RECOMP_OVERLAY_DUMP_UI (window.c): NULL or "menu" the menu (the default; the page and tab
+ * from ABYSS_LAUNCHER_PAGE / ABYSS_LAUNCHER_TAB); "toast" the first-launch hint and a balance hint; "intro", "intro:pad" or "intro:touch" the touch card with that device
+ * highlighted, and after it "@<seconds>" that moment of its demonstration's loop; "quit" the quit card; "layout" the layout card;
+ * "prep" the shader prep card with example numbers. */
 void overlay_render_forced(SDL_GPUDevice *device, SDL_GPUTexture *target, uint32_t w, uint32_t h, const char *ui);
 
 #ifdef __cplusplus

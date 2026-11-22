@@ -4,11 +4,10 @@
  */
 /*
  * Performance metrics for a play session: how fast the game is actually running, where the host's
- * own time goes, and whether the guest clock is keeping pace with real time. Three outputs share
+ * own time goes, and whether the guest clock is keeping pace with real time. Two outputs share
  * one set of numbers, recomputed at most twice a second (everything else is a cheap running total
- * -- see "feeding" below):
+ * -- see "feeding" below; the window title is the game's name, not these numbers):
  *
- *   - the window title (metrics_title): one line, refreshed ~2 Hz;
  *   - an on-screen overlay (metrics_osd_composite): F10 in window.c cycles off / basic (FPS and
  *     frame time only) / full; RECOMP_OSD=0|1|2 sets the start-up level. Default is 0: on the
  *     software path drawing it is nearly free (one blend into a CPU buffer already being built),
@@ -50,7 +49,7 @@
 
 static uint64_t now_us(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (uint64_t)t.tv_sec * 1000000 + t.tv_nsec / 1000; }
 
-/* whether anything will ever read these numbers: a window (title bar, F10 overlay), RECOMP_METRICS
+/* whether anything will ever read these numbers: a window (the F10 overlay, the Performance page), RECOMP_METRICS
  * or RECOMP_OSD. Resolved once; while it's 0 (headless runs: the gate, captures, the checker) the
  * hooks below cost one predictable branch and the game's frames see no extra work at all */
 int metrics_on(void) {
@@ -180,13 +179,8 @@ void metrics_set_audio(uint32_t queued_ms, uint32_t ports, uint32_t underruns) {
 	pthread_mutex_lock(&mx); audio_ms = queued_ms; audio_ports = ports; audio_underruns = underruns; pthread_mutex_unlock(&mx);
 }
 
-/* the overlay menu's Performance page ("show fps"): the same number the title bar and the F10
- * overlay already show, as a plain double instead of a drawn line */
-double metrics_fps(void) {
-	double fps, avg_ms, max_ms, low1_ms;
-	pthread_mutex_lock(&mx); game_frame_stats(now_us(), &fps, &avg_ms, &max_ms, &low1_ms); pthread_mutex_unlock(&mx);
-	return fps;
-}
+/* the overlay menu's Performance page ("show fps"): the same number the F10
+ * overlay already shows, as a plain double instead of a drawn line */
 
 /* ---- the on-screen overlay: a 5x7-dot font, hand-drawn below (upper-case letters, digits, space,
  * and the handful of symbols the stats actually use: . : / - %); unrecognised characters draw
@@ -374,14 +368,12 @@ static void maybe_dump_osd(void) {
 	if (level < 2) rebuild_osd(level);   /* restore what's actually meant to be on screen */
 }
 
-/* ---- the shared ~2 Hz recompute (title + overlay content) and ~1 Hz stderr report; either driver
+/* ---- the shared ~2 Hz recompute (the overlay's content) and ~1 Hz stderr report; either driver
  * (a game frame or a window-loop iteration) can trigger it, whichever crosses the gate first --
  * see this file's header comment for why there are two drivers */
 #define TICK_US 500000ull
 #define REPORT_US 1000000ull
 static uint64_t last_tick_us, last_report_us;
-static char line_title[160];
-static uint64_t last_title_emit_us;
 
 static void maybe_tick(uint64_t now) {
 	pthread_mutex_lock(&mx);
@@ -400,9 +392,6 @@ static void maybe_tick(uint64_t now) {
 	double render_ms = lf_render_us / 1000.0, present_ms = last_present_us / 1000.0;
 	uint32_t am = audio_ms, ap = audio_ports, au = audio_underruns;
 
-	snprintf(line_title, sizeof line_title,
-	        "vitarecomp - %.1f fps  frame %.1f/%.1f/%.1f ms  speed %.2fx  %s %u scn %u dr%s  cpu %.0f%%  win %.1f fps",
-	        fps, avg_ms, max_ms, low1_ms, speed, backend, scenes, draws, (gpu && fd) ? " (sw fallback)" : "", cpu, wfps);
 
 	/* the overlay's own lines, in its font's upper-case + digits + ". : / - %" charset only */
 	snprintf(line_full[0], sizeof line_full[0], "FPS %.1f FRAME %.1f/%.1f/%.1f MS", fps, avg_ms, max_ms, low1_ms);
@@ -455,13 +444,4 @@ void metrics_window_frame(uint64_t blit_us) {
 	last_present_us = blit_us;
 	pthread_mutex_unlock(&mx);
 	maybe_tick(now);
-}
-
-int metrics_title(char *buf, int bufsz) {
-	uint64_t now = now_us();
-	pthread_mutex_lock(&mx);
-	int due = !last_title_emit_us || now - last_title_emit_us >= 500000ull;
-	if (due) { last_title_emit_us = now; snprintf(buf, (size_t)bufsz, "%s", line_title); }
-	pthread_mutex_unlock(&mx);
-	return due;
 }

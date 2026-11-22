@@ -10,10 +10,15 @@
 // quits; ABYSS_LAUNCHER_PAGE=0..3 and ABYSS_LAUNCHER_TAB=n choose what it shows. ABYSS_LAUNCHER_AUTOPLAY=<seconds>
 // presses Play by itself and quits when the game ends. ABYSS_LAUNCHER_PREPARE=<copy>|<PUP> (a release) chooses the
 // two, presses Prepare, and quits when it ends: exit code 0 when the game is then ready. ABYSS_LAUNCHER_LANGUAGE=
-// en|it|pt|es speaks that language.
+// en|it|pt|es speaks that language. ABYSS_LAUNCHER_PLAY=1 (RecompLauncher) presses Play once the game is ready.
+//
+// The same pages are the game's menu (F1): built into the runtime with ABYSS_LAUNCHER_IN_GAME, drawn by
+// src/ui/overlay.cpp over the paused game (launcher_game.h), as mc3port's launcher is its in-game menu.
 
 #include <SDL3/SDL.h>
+#ifndef ABYSS_LAUNCHER_IN_GAME
 #include <SDL3/SDL_main.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -22,10 +27,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #define NOMINMAX
@@ -37,12 +44,22 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#ifndef ABYSS_LAUNCHER_IN_GAME
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #include "third_party/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "third_party/stb/stb_image_write.h"
+#else
+#include "third_party/stb/stb_image.h"   // the runtime's (src/media/jpeg.c): PNG and JPEG, from memory only
+#include "launcher_game.h"
+#endif
+#include "game_texts.h"
+#include "update_check.h"
+#ifndef ABYSS_LAUNCHER_IN_GAME
+#include <winhttp.h>
+#endif
 
 extern "C" {
 #include "settings.h"
@@ -71,7 +88,7 @@ struct Texts {
     const char *frame_rate, *frame_rate_detail;
     const char *anisotropy;
     const char *fsr, *fsr_detail, *post_aa, *post_aa_detail, *sharpen, *ssao, *ssao_detail, *shadows, *shadow_names[3];
-    const char *fov, *fov_detail, *view_distance, *view_distance_detail, *language, *language_names[5];
+    const char *fov, *fov_detail, *view_distance, *view_distance_detail, *language, *language_names[5], *game_language, *game_language_detail;
     const char *volume, *no, *yes;
     const char *controls_lead, *tab_keys, *tab_mouse, *tab_how;
     const char *press_key, *default_keys, *none;
@@ -91,6 +108,16 @@ struct Texts {
     const char *copy, *copy_none, *pup, *pup_none, *choose, *prepare, *cancel, *failed, *space, *duration, *compile_only;
     const char *steps[7];
     const char *enter;  // the key's name in the hints
+    const char *support, *support_sub, *report;
+    // the game's menu (F1): the launcher's pages over the paused game
+    const char *resume, *paused_title, *paused_lead, *back_launcher, *quit_game;
+    const char *osd, *osd_detail, *osd_names[3], *layout, *layout_detail, *layout_names[3];
+    // the first run: where the firmware file comes from (Sony's page for the Vita's system software)
+    const char *pup_where, *pup_get;
+    const char *change_copy;   // Play: another copy of the game (US or European), made again
+    // the update check (mc3port's): About's row, the notice over Play, the setting
+    const char *checking, *up_to_date, *update_found, *update_sub, *update_open, *update_title, *update_lead, *update_page,
+        *update_portable_note, *update_later, *check_updates, *check_updates_detail;
 };
 
 const Texts kItalian = {
@@ -113,6 +140,7 @@ const Texts kItalian = {
     "Occlusione ambientale", "Ombre morbide negli angoli e nei contatti", "Ombre", {"Originali", "Morbide", "Più morbide"},
     "Campo visivo", "1.00 è quello del gioco", "Distanza visiva", "Rocce e vegetazione spariscono più lontano",
     "Lingua del launcher", {"Automatica", "Italiano", "English", "Português", "Español"},
+    "Lingua del gioco", "Testi e voci: Automatica segue Windows",
     "Volume", "No", "Sì",
     "I controller funzionano così come sono. Qui scegli tasti e mouse, e vedi come si gioca senza touch.",
     "Tastiera", "Mouse e controller", "Come si gioca",
@@ -162,7 +190,7 @@ const Texts kItalian = {
     "Gioco", "pronto", "da preparare", "Controller", "collegato", "non collegato", "Versione",
     "Muovi", "Seleziona", "Indietro", "Pagine", "Schede",
     "Avvio del gioco...",
-    "La tua copia del gioco", "La cartella PCSA00029 copiata dalla console, con sce_sys/package/work.bin",
+    "La tua copia del gioco", "La cartella PCSA00029 (USA) o PCSF00012 (Europa) copiata dalla console, con sce_sys/package/work.bin",
     "Il file del firmware", "PSVUPDAT.PUP, aggiornamento 3.74 di PS Vita",
     "Scegli", "PREPARA", "Annulla", "Preparazione non riuscita",
     "Servono almeno %d GB liberi in %s",
@@ -171,6 +199,16 @@ const Texts kItalian = {
     {"Decrittazione del firmware", "Decrittazione del gioco", "Controllo della versione 1.00", "Analisi del codice",
      "Codice ARM in C", "Compilazione", "Collegamento"},
     "Invio",
+    "Sostieni il progetto", "Gratis, e lo rester\xC3\xA0. Un grazie lo fa andare avanti.", "Segnala un problema",
+    "RIPRENDI", "IN PAUSA", "Il gioco ti aspetta. Le impostazioni cambiano subito.", "TORNA AL LAUNCHER", "ESCI DAL GIOCO",
+    "Prestazioni a schermo", "Fotogrammi al secondo e tempi sopra il gioco (anche F10)", {"No", "Essenziali", "Complete"},
+    "Schema dei comandi", "Come si fanno le azioni del touch: come sulla console portatile, o lo schema della PS TV, solo tasti. Dal prossimo avvio",
+    {"Chiedi", "Standard", "PS TV"},
+    "Il file si scarica dal sito di Sony: l'aggiornamento del sistema PS Vita 3.74.", "Scarica da Sony",
+    "Cambia copia",
+    "Cerco una versione nuova...", "Questa è l'ultima versione", "È uscito abyssport %s", "Sulla pagina della release, con le novità", "Apri",
+    "NUOVA VERSIONE", "È uscito abyssport %s. Le novità:", "APRI LA PAGINA", "Questa copia è portatile: scarica la nuova versione dalla pagina della release.",
+    "Più tardi", "Aggiornamenti", "Cerca un nuovo abyssport su GitHub quando si apre il launcher",
 };
 
 const Texts kEnglish = {
@@ -193,6 +231,7 @@ const Texts kEnglish = {
     "Ambient occlusion", "Soft shadows in corners and contacts", "Shadows", {"Original", "Soft", "Softer"},
     "Field of view", "1.00 is the game's own", "View distance", "Rocks and foliage fade out further away",
     "Launcher language", {"Automatic", "Italiano", "English", "Português", "Español"},
+    "Game language", "Text and voices: Automatic follows Windows",
     "Volume", "No", "Yes",
     "Controllers work as they are. Here you choose keys and mouse, and see how to play without touch.",
     "Keyboard", "Mouse and controller", "How to play",
@@ -242,7 +281,7 @@ const Texts kEnglish = {
     "Game", "ready", "to be made", "Controller", "connected", "not connected", "Version",
     "Move", "Select", "Back", "Pages", "Tabs",
     "Starting the game...",
-    "Your copy of the game", "The PCSA00029 folder copied off the console, with sce_sys/package/work.bin",
+    "Your copy of the game", "The PCSA00029 (US) or PCSF00012 (Europe) folder copied off the console, with sce_sys/package/work.bin",
     "The firmware file", "PSVUPDAT.PUP, PS Vita system update 3.74",
     "Choose", "PREPARE", "Cancel", "Preparing failed",
     "At least %d GB must be free in %s",
@@ -251,6 +290,16 @@ const Texts kEnglish = {
     {"Decrypting the firmware", "Decrypting the game", "Checking version 1.00", "Analysing the code",
      "ARM code to C", "Compiling", "Linking"},
     "Enter",
+    "Support the project", "Free, and always will be. A thank-you keeps it going.", "Report a problem",
+    "RESUME", "PAUSED", "The game waits for you. Settings change at once.", "BACK TO THE LAUNCHER", "QUIT THE GAME",
+    "Performance display", "Frames per second and frame times over the game (F10 too)", {"Off", "Basic", "Full"},
+    "Controller layout", "How the touch screen's actions are done: as on the handheld, or the PS TV's own layout, buttons only. Next start",
+    {"Ask", "Standard", "PS TV"},
+    "The file comes from Sony's website: the PS Vita system update 3.74.", "Get it from Sony",
+    "Change copy",
+    "Looking for a new version...", "This is the latest version", "abyssport %s is out", "On the release page, with what is new", "Open",
+    "NEW VERSION", "abyssport %s is out. What is new:", "OPEN THE PAGE", "This copy is portable: download the new version from the release page.",
+    "Later", "Updates", "Look for a new abyssport on GitHub when the launcher opens",
 };
 
 std::string setting(const char* key, const char* def) {
@@ -278,6 +327,7 @@ const Texts kPortuguese = {
     "Oclusão de ambiente", "Sombras suaves em cantos e contatos", "Sombras", {"Originais", "Suaves", "Mais suaves"},
     "Campo de visão", "1.00 é o do jogo", "Distância de visão", "Rochas e vegetação somem mais longe",
     "Idioma do launcher", {"Automático", "Italiano", "English", "Português", "Español"},
+    "Idioma do jogo", "Textos e vozes: Automático segue o Windows",
     "Volume", "Não", "Sim",
     "Os controles funcionam como estão. Aqui você escolhe teclas e mouse, e vê como jogar sem toque.",
     "Teclado", "Mouse e controle", "Como jogar",
@@ -327,7 +377,7 @@ const Texts kPortuguese = {
     "Jogo", "pronto", "a preparar", "Controle", "conectado", "não conectado", "Versão",
     "Mover", "Selecionar", "Voltar", "Páginas", "Abas",
     "Iniciando o jogo...",
-    "Sua cópia do jogo", "A pasta PCSA00029 copiada do console, com sce_sys/package/work.bin",
+    "Sua cópia do jogo", "A pasta PCSA00029 (EUA) ou PCSF00012 (Europa) copiada do console, com sce_sys/package/work.bin",
     "O arquivo do firmware", "PSVUPDAT.PUP, atualização 3.74 do sistema do PS Vita",
     "Escolher", "PREPARAR", "Cancelar", "A preparação falhou",
     "São necessários pelo menos %d GB livres em %s",
@@ -336,6 +386,16 @@ const Texts kPortuguese = {
     {"Descriptografando o firmware", "Descriptografando o jogo", "Verificando a versão 1.00", "Analisando o código",
      "Código ARM em C", "Compilando", "Vinculando"},
     "Enter",
+    "Apoie o projeto", "Gratuito, e sempre ser\xC3\xA1. Um obrigado o mant\xC3\xA9m vivo.", "Relatar um problema",
+    "CONTINUAR", "PAUSADO", "O jogo espera por você. As configurações mudam na hora.", "VOLTAR AO LAUNCHER", "SAIR DO JOGO",
+    "Desempenho na tela", "Quadros por segundo e tempos sobre o jogo (também F10)", {"Não", "Básico", "Completo"},
+    "Layout dos comandos", "Como as ações de toque são feitas: como no portátil, ou o layout do PS TV, só botões. No próximo início",
+    {"Perguntar", "Padrão", "PS TV"},
+    "O arquivo é baixado do site da Sony: a atualização do sistema PS Vita 3.74.", "Baixar da Sony",
+    "Trocar cópia",
+    "Procurando uma versão nova...", "Esta é a versão mais recente", "Saiu o abyssport %s", "Na página da versão, com as novidades", "Abrir",
+    "NOVA VERSÃO", "Saiu o abyssport %s. Novidades:", "ABRIR A PÁGINA", "Esta cópia é portátil: baixe a nova versão na página da versão.",
+    "Mais tarde", "Atualizações", "Procurar um novo abyssport no GitHub ao abrir o launcher",
 };
 
 const Texts kSpanish = {
@@ -358,6 +418,7 @@ const Texts kSpanish = {
     "Oclusión ambiental", "Sombras suaves en esquinas y contactos", "Sombras", {"Originales", "Suaves", "Más suaves"},
     "Campo de visión", "1.00 es el del juego", "Distancia de visión", "Rocas y vegetación desaparecen más lejos",
     "Idioma del launcher", {"Automático", "Italiano", "English", "Português", "Español"},
+    "Idioma del juego", "Textos y voces: Automático sigue a Windows",
     "Volumen", "No", "Sí",
     "Los mandos funcionan tal cual. Aquí eliges teclas y ratón, y ves cómo se juega sin pantalla táctil.",
     "Teclado", "Ratón y mando", "Cómo se juega",
@@ -407,7 +468,7 @@ const Texts kSpanish = {
     "Juego", "listo", "por preparar", "Mando", "conectado", "no conectado", "Versión",
     "Mover", "Seleccionar", "Atrás", "Páginas", "Pestañas",
     "Iniciando el juego...",
-    "Tu copia del juego", "La carpeta PCSA00029 copiada de la consola, con sce_sys/package/work.bin",
+    "Tu copia del juego", "La carpeta PCSA00029 (EE. UU.) o PCSF00012 (Europa) copiada de la consola, con sce_sys/package/work.bin",
     "El archivo del firmware", "PSVUPDAT.PUP, actualización 3.74 del sistema de PS Vita",
     "Elegir", "PREPARAR", "Cancelar", "La preparación falló",
     "Se necesitan al menos %d GB libres en %s",
@@ -416,11 +477,21 @@ const Texts kSpanish = {
     {"Descifrando el firmware", "Descifrando el juego", "Comprobando la versión 1.00", "Analizando el código",
      "Código ARM a C", "Compilando", "Enlazando"},
     "Intro",
+    "Apoya el proyecto", "Gratis, y siempre lo ser\xC3\xA1. Un gracias lo mantiene vivo.", "Informar de un problema",
+    "CONTINUAR", "EN PAUSA", "El juego te espera. Los ajustes cambian al momento.", "VOLVER AL LAUNCHER", "SALIR DEL JUEGO",
+    "Rendimiento en pantalla", "Fotogramas por segundo y tiempos sobre el juego (también F10)", {"No", "Básico", "Completo"},
+    "Esquema de los controles", "Cómo se hacen las acciones táctiles: como en la portátil, o el esquema de PS TV, solo botones. Al próximo inicio",
+    {"Preguntar", "Estándar", "PS TV"},
+    "El archivo se descarga de la web de Sony: la actualización del sistema PS Vita 3.74.", "Descargar de Sony",
+    "Cambiar copia",
+    "Buscando una versión nueva...", "Es la última versión", "Ha salido abyssport %s", "En la página de la versión, con las novedades", "Abrir",
+    "NUEVA VERSIÓN", "Ha salido abyssport %s. Novedades:", "ABRIR LA PÁGINA", "Esta copia es portátil: descarga la nueva versión de la página de la versión.",
+    "Más tarde", "Actualizaciones", "Buscar un abyssport nuevo en GitHub al abrir el launcher",
 };
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
 // ABYSS_LAUNCHER_LANGUAGE=en|it|pt|es overrides both, for test screenshots.
-const Texts& T() {
+std::string launcher_language() {
     char forced[8] = {};
     std::string language = GetEnvironmentVariableA("ABYSS_LAUNCHER_LANGUAGE", forced, sizeof(forced)) ? forced
                                                                                                     : setting("launcher_language", "auto");
@@ -428,7 +499,245 @@ const Texts& T() {
         const WORD windows = PRIMARYLANGID(GetUserDefaultUILanguage());
         language = windows == LANG_ITALIAN ? "it" : windows == LANG_PORTUGUESE ? "pt" : windows == LANG_SPANISH ? "es" : "en";
     }
+    return language;
+}
+const Texts& T() {
+    const std::string language = launcher_language();
     return language == "it" ? kItalian : language == "pt" ? kPortuguese : language == "es" ? kSpanish : kEnglish;
+}
+
+// The runtime's cards over the game (game_texts.h), in GameText's order.
+const char* const kGameTextsEnglish[GT_COUNT] = {
+    "Save", "Load", "Delete",
+    "Do you want to save?", "Do you want to load this saved data?", "Do you want to delete this saved data?",
+    "Saving... Do not power off the system.", "Loading...", "Please wait...",
+    "Saving complete.", "Loading complete.", "Deletion complete.",
+    "Do you want to cancel saving?", "Do you want to cancel loading?", "Do you want to cancel deleting?",
+    "There is no saved data.", "Do you want to overwrite this saved data?", "The saved data is corrupted.",
+    "There is not enough free space to save.", "There is no saved data that can be used with this application.",
+    "An error occurred. (%08X)",
+    "Saving...",
+    "New Saved Data", "Saved data %u", "Saved data", "(empty)",
+    "Cross / Enter: choose    Circle / Esc: back", "Cross / Enter    Circle / Esc: back", "Back", "Yes", "No", "Continue?",
+    "Quit %s?", "the game", "Progress since your last save will be lost.", "Keep playing", "Quit game", "Back to the launcher",
+    "Menu", "[F1], the PS button or Select+Start: settings, controls, back to the launcher", "Balance",
+    "Slide", "[%s] [%s] tilt left / right", "[%s] [%s] steer left / right",
+    "Left stick: tilt left / right", "Left stick: steer left / right", "Tilt the controller to tilt",
+    "Tilt the controller to steer", "Shaders ready", "Built for this computer: no more pauses to build them.",
+    "Compiling shaders", "Building this area's graphics for the first time", "Touch",
+    "Hold [Alt]: the cursor is a finger. The left button touches the screen, the right button the back", "The touchpad, or hold [L2]: a stick moves the finger, Cross touches", "The touchpad, or hold [L1]: a stick moves the finger, Cross touches",
+    "Mouse aim", "Direct: the game turns as far as the mouse moves [F8]", "Stick: the mouse drives the right stick [F8]",
+    "Keyboard & mouse", "The mouse looks and aims -- hold [Alt] for the cursor\nControls: [F1]", "Two-finger turn",
+    "Hold the left button and drag down / up", "Push both sticks out and roll them", "FSR 3.1 anti-aliasing on",
+    "FSR 3.1 anti-aliasing off", "Camera", "Lamp on: the Vita's camera sees a bright light [F7]",
+    "Lamp off: the Vita's camera sees a dark room [F7]", "The game is using the Vita's camera: your computer's camera stands in for it\nChange it: [F1] > Controls", "The game is using the Vita's camera: it sees a bright lamp\n[F7] turns it off",
+    "The game is using the Vita's camera: it sees a dark room\n[F7] shines a lamp into it", "Online play needs update %s", "This copy of the game isn't the version online play is for. Add update %s in the launcher, then play again.",
+    "Touching the screen", "That's it", "Vita games are played with the touch screen as well as buttons. Here's how to touch it:",
+    "Keyboard and mouse", "Hold %s and click to touch the screen. Right-click instead to touch the rear pad.", "Controller",
+    "Hold %s and steer the cursor with a stick, then press %s to touch. %s does the same on the rear pad.%s", " The touchpad works too.", "Touch screen",
+    "Touch the picture, as you would the Vita's own screen.", "Try it now to continue.", "Back to the game.",
+    "F1 opens the menu, with every control. Esc skips this.", "Building shaders %d%%", "Preparing shaders",
+    "Building %s's shaders for this computer, so it plays without pauses. This happens once: later starts are quick.", "%s of %s", "Working out the time left",
+    "Less than a minute left", "About 1 minute left", "About %d minutes left",
+    "Skip", "Skipping starts the game now. You may see short pauses until the shaders are built: they keep building while you play.",
+};
+const char* const kGameTextsItalian[GT_COUNT] = {
+    "Salva", "Carica", "Elimina",
+    "Vuoi salvare?", "Vuoi caricare questi dati salvati?", "Vuoi eliminare questi dati salvati?",
+    "Salvataggio in corso... Non spegnere il sistema.", "Caricamento in corso...", "Attendere...",
+    "Salvataggio completato.", "Caricamento completato.", "Eliminazione completata.",
+    "Vuoi annullare il salvataggio?", "Vuoi annullare il caricamento?", "Vuoi annullare l'eliminazione?",
+    "Non ci sono dati salvati.", "Vuoi sovrascrivere questi dati salvati?", "I dati salvati sono danneggiati.",
+    "Non c'\xC3\xA8 abbastanza spazio libero per salvare.", "Non ci sono dati salvati utilizzabili con questa applicazione.",
+    "Si \xC3\xA8 verificato un errore. (%08X)",
+    "Salvataggio in corso...",
+    "Nuovi dati salvati", "Dati salvati %u", "Dati salvati", "(vuoto)",
+    "Croce / Invio: scegli    Cerchio / Esc: indietro", "Croce / Invio    Cerchio / Esc: indietro", "Indietro", "S\xC3\xAC", "No", "Continuare?",
+    "Uscire da %s?", "il gioco", "I progressi dall'ultimo salvataggio andranno persi.", "Continua a giocare", "Esci dal gioco", "Torna al launcher",
+    "Menu", "[F1], il tasto PS o Select+Start: impostazioni, comandi, ritorno al launcher", "Equilibrio",
+    "Scivolata", "[%s] [%s] inclina a sinistra / destra", "[%s] [%s] sterza a sinistra / destra",
+    "Levetta sinistra: inclina a sinistra / destra", "Levetta sinistra: sterza a sinistra / destra", "Inclina il controller per restare in equilibrio",
+    "Inclina il controller per sterzare", "Shader pronti", "Preparati per questo computer: niente più pause per costruirli.",
+    "Compilazione shader", "Preparo la grafica di questa zona per la prima volta", "Tocco",
+    "Tieni premuto [Alt]: il cursore è un dito. Il tasto sinistro tocca lo schermo, il destro il retro", "Il touchpad, o tieni premuto [L2]: una levetta muove il dito, Croce tocca", "Il touchpad, o tieni premuto [L1]: una levetta muove il dito, Croce tocca",
+    "Mira col mouse", "Diretta: il gioco gira quanto si muove il mouse [F8]", "Levetta: il mouse muove la levetta destra [F8]",
+    "Tastiera e mouse", "Il mouse guarda e mira; tieni premuto [Alt] per il cursore\nComandi: [F1]", "Rotazione a due dita",
+    "Tieni premuto il tasto sinistro e trascina giù / su", "Spingi le due levette in fuori e ruotale", "Anti-aliasing FSR 3.1 attivo",
+    "Anti-aliasing FSR 3.1 disattivato", "Fotocamera", "Lampada accesa: la fotocamera della Vita vede una luce forte [F7]",
+    "Lampada spenta: la fotocamera della Vita vede una stanza buia [F7]", "Il gioco usa la fotocamera della Vita: la sostituisce la fotocamera del computer\nPer cambiarla: [F1] > Comandi", "Il gioco usa la fotocamera della Vita: vede una lampada accesa\n[F7] la spegne",
+    "Il gioco usa la fotocamera della Vita: vede una stanza buia\n[F7] accende una lampada", "Il gioco online richiede l'aggiornamento %s", "Questa copia del gioco non è la versione per il gioco online. Aggiungi l'aggiornamento %s nel launcher, poi gioca di nuovo.",
+    "Toccare lo schermo", "Fatto", "I giochi Vita si giocano con il touch screen oltre che con i tasti. Ecco come toccarlo:",
+    "Tastiera e mouse", "Tieni premuto %s e fai clic per toccare lo schermo. Con il tasto destro tocchi invece il pannello posteriore.", "Controller",
+    "Tieni premuto %s e muovi il cursore con una levetta, poi premi %s per toccare. %s fa lo stesso sul pannello posteriore.%s", " Funziona anche il touchpad.", "Touch screen",
+    "Tocca l'immagine, come faresti sullo schermo della Vita.", "Provalo ora per continuare.", "Si torna al gioco.",
+    "F1 apre il menu, con tutti i comandi. Esc salta questa schermata.", "Preparazione shader %d%%", "Preparazione degli shader",
+    "Preparo gli shader di %s per questo computer, così si gioca senza pause. Succede una volta sola: gli avvii successivi sono rapidi.", "%s di %s", "Calcolo del tempo che manca",
+    "Manca meno di un minuto", "Manca circa 1 minuto", "Mancano circa %d minuti",
+    "Salta", "Saltando, il gioco parte subito. Potresti vedere brevi pause finché gli shader non sono pronti: continuano a prepararsi mentre giochi.",
+};
+const char* const kGameTextsPortuguese[GT_COUNT] = {
+    "Salvar", "Carregar", "Excluir",
+    "Deseja salvar?", "Deseja carregar estes dados salvos?", "Deseja excluir estes dados salvos?",
+    "Salvando... N\xC3\xA3o desligue o sistema.", "Carregando...", "Aguarde...",
+    "Salvamento conclu\xC3\xAD" "do.", "Carregamento conclu\xC3\xAD" "do.", "Exclus\xC3\xA3o conclu\xC3\xAD" "da.",
+    "Deseja cancelar o salvamento?", "Deseja cancelar o carregamento?", "Deseja cancelar a exclus\xC3\xA3o?",
+    "N\xC3\xA3o h\xC3\xA1 dados salvos.", "Deseja substituir estes dados salvos?", "Os dados salvos est\xC3\xA3o corrompidos.",
+    "N\xC3\xA3o h\xC3\xA1 espa\xC3\xA7o livre suficiente para salvar.", "N\xC3\xA3o h\xC3\xA1 dados salvos que possam ser usados com este aplicativo.",
+    "Ocorreu um erro. (%08X)",
+    "Salvando...",
+    "Novos dados salvos", "Dados salvos %u", "Dados salvos", "(vazio)",
+    "X / Enter: escolher    C\xC3\xADrculo / Esc: voltar", "X / Enter    C\xC3\xADrculo / Esc: voltar", "Voltar", "Sim", "N\xC3\xA3o", "Continuar?",
+    "Sair de %s?", "o jogo", "O progresso desde o \xC3\xBAltimo salvamento ser\xC3\xA1 perdido.", "Continuar jogando", "Sair do jogo", "Voltar ao launcher",
+    "Menu", "[F1], o botão PS ou Select+Start: configurações, controles, voltar ao launcher", "Equilíbrio",
+    "Deslizamento", "[%s] [%s] incline para a esquerda / direita", "[%s] [%s] vire para a esquerda / direita",
+    "Analógico esquerdo: incline para a esquerda / direita", "Analógico esquerdo: vire para a esquerda / direita", "Incline o controle para se equilibrar",
+    "Incline o controle para virar", "Shaders prontos", "Preparados para este computador: sem mais pausas para criá-los.",
+    "Compilando shaders", "Preparando os gráficos desta área pela primeira vez", "Toque",
+    "Segure [Alt]: o cursor é um dedo. O botão esquerdo toca a tela, o direito a traseira", "O touchpad, ou segure [L2]: um analógico move o dedo, X toca", "O touchpad, ou segure [L1]: um analógico move o dedo, X toca",
+    "Mira com o mouse", "Direta: o jogo gira o quanto o mouse se move [F8]", "Analógico: o mouse move o analógico direito [F8]",
+    "Teclado e mouse", "O mouse olha e mira; segure [Alt] para o cursor\nControles: [F1]", "Giro com dois dedos",
+    "Segure o botão esquerdo e arraste para baixo / cima", "Empurre os dois analógicos para fora e gire-os", "Anti-aliasing FSR 3.1 ligado",
+    "Anti-aliasing FSR 3.1 desligado", "Câmera", "Lâmpada acesa: a câmera do Vita vê uma luz forte [F7]",
+    "Lâmpada apagada: a câmera do Vita vê um quarto escuro [F7]", "O jogo está usando a câmera do Vita: a câmera do seu computador a substitui\nPara mudar: [F1] > Controles", "O jogo está usando a câmera do Vita: ela vê uma lâmpada acesa\n[F7] a apaga",
+    "O jogo está usando a câmera do Vita: ela vê um quarto escuro\n[F7] acende uma lâmpada", "O jogo online precisa da atualização %s", "Esta cópia do jogo não é a versão do jogo online. Adicione a atualização %s no launcher e jogue de novo.",
+    "Tocar na tela", "Pronto", "Os jogos de Vita usam a tela sensível ao toque além dos botões. Veja como tocá-la:",
+    "Teclado e mouse", "Segure %s e clique para tocar a tela. Clique com o botão direito para tocar o painel traseiro.", "Controle",
+    "Segure %s e mova o cursor com um analógico, depois pressione %s para tocar. %s faz o mesmo no painel traseiro.%s", " O touchpad também funciona.", "Tela sensível ao toque",
+    "Toque na imagem, como faria na tela do Vita.", "Experimente agora para continuar.", "De volta ao jogo.",
+    "F1 abre o menu, com todos os controles. Esc pula esta tela.", "Criando shaders %d%%", "Preparando os shaders",
+    "Criando os shaders de %s para este computador, para jogar sem pausas. Isso acontece uma vez: as próximas inicializações são rápidas.", "%s de %s", "Calculando o tempo restante",
+    "Falta menos de um minuto", "Falta cerca de 1 minuto", "Faltam cerca de %d minutos",
+    "Pular", "Pulando, o jogo começa agora. Você pode ver pausas curtas até os shaders ficarem prontos: eles continuam sendo criados enquanto você joga.",
+};
+const char* const kGameTextsSpanish[GT_COUNT] = {
+    "Guardar", "Cargar", "Eliminar",
+    "\xC2\xBFQuieres guardar?", "\xC2\xBFQuieres cargar estos datos guardados?", "\xC2\xBFQuieres eliminar estos datos guardados?",
+    "Guardando... No apagues el sistema.", "Cargando...", "Espera...",
+    "Guardado completado.", "Carga completada.", "Eliminaci\xC3\xB3n completada.",
+    "\xC2\xBFQuieres cancelar el guardado?", "\xC2\xBFQuieres cancelar la carga?", "\xC2\xBFQuieres cancelar la eliminaci\xC3\xB3n?",
+    "No hay datos guardados.", "\xC2\xBFQuieres sobrescribir estos datos guardados?", "Los datos guardados est\xC3\xA1n da\xC3\xB1" "ados.",
+    "No hay suficiente espacio libre para guardar.", "No hay datos guardados que se puedan usar con esta aplicaci\xC3\xB3n.",
+    "Se ha producido un error. (%08X)",
+    "Guardando...",
+    "Nuevos datos guardados", "Datos guardados %u", "Datos guardados", "(vac\xC3\xADo)",
+    "Cruz / Intro: elegir    C\xC3\xADrculo / Esc: volver", "Cruz / Intro    C\xC3\xADrculo / Esc: volver", "Volver", "S\xC3\xAD", "No", "\xC2\xBF" "Continuar?",
+    "\xC2\xBFSalir de %s?", "el juego", "Se perder\xC3\xA1 el progreso desde el \xC3\xBAltimo guardado.", "Seguir jugando", "Salir del juego", "Volver al launcher",
+    "Menú", "[F1], el botón PS o Select+Start: ajustes, controles, volver al launcher", "Equilibrio",
+    "Deslizamiento", "[%s] [%s] inclina a la izquierda / derecha", "[%s] [%s] gira a la izquierda / derecha",
+    "Joystick izquierdo: inclina a la izquierda / derecha", "Joystick izquierdo: gira a la izquierda / derecha", "Inclina el mando para mantener el equilibrio",
+    "Inclina el mando para girar", "Shaders listos", "Preparados para este ordenador: no habrá más pausas para crearlos.",
+    "Compilando shaders", "Preparando los gráficos de esta zona por primera vez", "Táctil",
+    "Mantén [Alt]: el cursor es un dedo. El botón izquierdo toca la pantalla, el derecho la parte trasera", "El panel táctil, o mantén [L2]: un joystick mueve el dedo, Cruz toca", "El panel táctil, o mantén [L1]: un joystick mueve el dedo, Cruz toca",
+    "Apuntar con el ratón", "Directo: el juego gira lo que se mueve el ratón [F8]", "Joystick: el ratón mueve el joystick derecho [F8]",
+    "Teclado y ratón", "El ratón mira y apunta; mantén [Alt] para el cursor\nControles: [F1]", "Giro con dos dedos",
+    "Mantén el botón izquierdo y arrastra abajo / arriba", "Empuja los dos joysticks hacia fuera y gíralos", "Antialiasing FSR 3.1 activado",
+    "Antialiasing FSR 3.1 desactivado", "Cámara", "Lámpara encendida: la cámara de la Vita ve una luz intensa [F7]",
+    "Lámpara apagada: la cámara de la Vita ve una habitación oscura [F7]", "El juego usa la cámara de la Vita: la sustituye la cámara de tu ordenador\nPara cambiarla: [F1] > Controles", "El juego usa la cámara de la Vita: ve una lámpara encendida\n[F7] la apaga",
+    "El juego usa la cámara de la Vita: ve una habitación oscura\n[F7] enciende una lámpara", "El juego online necesita la actualización %s", "Esta copia del juego no es la versión del juego online. Añade la actualización %s en el launcher y vuelve a jugar.",
+    "Tocar la pantalla", "Listo", "Los juegos de Vita se juegan con la pantalla táctil además de los botones. Así se toca:",
+    "Teclado y ratón", "Mantén %s y haz clic para tocar la pantalla. Con el clic derecho tocas el panel trasero.", "Mando",
+    "Mantén %s y mueve el cursor con un joystick, luego pulsa %s para tocar. %s hace lo mismo en el panel trasero.%s", " El panel táctil también funciona.", "Pantalla táctil",
+    "Toca la imagen, como harías en la pantalla de la Vita.", "Pruébalo ahora para continuar.", "De vuelta al juego.",
+    "F1 abre el menú, con todos los controles. Esc omite esta pantalla.", "Creando shaders %d%%", "Preparando los shaders",
+    "Creando los shaders de %s para este ordenador, para jugar sin pausas. Ocurre una sola vez: los siguientes inicios son rápidos.", "%s de %s", "Calculando el tiempo restante",
+    "Queda menos de un minuto", "Queda aproximadamente 1 minuto", "Quedan unos %d minutos",
+    "Omitir", "Si omites, el juego empieza ahora. Puede que veas pausas breves hasta que los shaders estén listos: se siguen creando mientras juegas.",
+};
+
+// The game's languages: the names its text files have (find_game reads a copy's), what each is called, and the console's code for it that the game is told (RECOMP_LANGUAGE, apputil.c).
+// --- update check (a thread at the start; mc3port's launcher's) ---
+struct UpdateCheck {
+    std::mutex mutex;
+    int state = 3;  // 0 checking, 1 up to date, 2 newer found, 3 none (off, failed, or the game's menu)
+    std::string version, url;
+    std::vector<std::string> points;  // what is new, from the release's notes
+};
+#ifndef ABYSS_LAUNCHER_IN_GAME
+constexpr char kRepository[] = "SickSartori/abyssport";
+// A GET over HTTPS (WinHTTP follows redirects), at most a few seconds each way; the body only when the answer is 200.
+std::string https_get(const std::wstring& url, const wchar_t* headers, DWORD* status) {
+    std::string body;
+    *status = 0;
+    wchar_t host[256] = {}, path[2048] = {}, query[2048] = {};
+    URL_COMPONENTS parts = {sizeof(parts)};
+    parts.lpszHostName = host;
+    parts.dwHostNameLength = 256;
+    parts.lpszUrlPath = path;
+    parts.dwUrlPathLength = 2048;
+    parts.lpszExtraInfo = query;
+    parts.dwExtraInfoLength = 2048;
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts) || parts.nScheme != INTERNET_SCHEME_HTTPS) return body;
+    const std::wstring target = std::wstring(path) + query;
+    const std::string version = ABYSS_VERSION;
+    const std::wstring agent = L"abyssport/" + std::wstring(version.begin(), version.end());
+    HINTERNET session = WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, nullptr, nullptr, 0);
+    if (session) WinHttpSetTimeouts(session, 5000, 5000, 5000, 5000);   // (closing the launcher waits for it)
+    HINTERNET connection = session ? WinHttpConnect(session, host, parts.nPort, 0) : nullptr;
+    HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET", target.c_str(), nullptr, nullptr, nullptr, WINHTTP_FLAG_SECURE) : nullptr;
+    DWORD size = sizeof(*status);
+    if (request && WinHttpSendRequest(request, headers ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers ? static_cast<DWORD>(-1) : 0, nullptr, 0, 0, 0) &&
+        WinHttpReceiveResponse(request, nullptr) &&
+        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, nullptr, status, &size, nullptr) && *status == 200) {
+        char buffer[16384];
+        DWORD read = 0;
+        while (WinHttpReadData(request, buffer, sizeof(buffer), &read) && read) body.append(buffer, read);
+    }
+    if (request) WinHttpCloseHandle(request);
+    if (connection) WinHttpCloseHandle(connection);
+    if (session) WinHttpCloseHandle(session);
+    return body;
+}
+// ABYSS_UPDATE_TEST=<version>: the launcher takes itself for that version (a test of the notice).
+const char* update_test() {
+    static char version[32] = {};
+    static const bool set = GetEnvironmentVariableA("ABYSS_UPDATE_TEST", version, sizeof(version)) > 0;
+    return set ? version : nullptr;
+}
+// The latest release on GitHub: its tag, its page (only the repository's own) and the points of its notes.
+void check_for_updates(UpdateCheck* check) {
+    wchar_t latest[160];
+    std::swprintf(latest, 160, L"https://api.github.com/repos/%hs/releases/latest", kRepository);
+    DWORD status = 0;
+    const std::string body = https_get(latest, L"Accept: application/vnd.github+json\r\n", &status);
+    const std::string tag = update::json_text(body, "tag_name"), url = update::json_text(body, "html_url");
+    std::lock_guard<std::mutex> lock(check->mutex);
+    if (tag.empty()) {
+        check->state = 3;
+        return;
+    }
+    check->state = update::version_numbers(tag) > update::version_numbers(update_test() ? update_test() : ABYSS_VERSION) ? 2 : 1;
+    check->version = tag;
+    check->url = update::release_link(url, kRepository, "tag/") ? url : std::string("https://github.com/") + kRepository + "/releases";
+    check->points = update::release_points(update::json_text(body, "body"), 6);
+}
+#endif
+
+struct GameLanguage { const char *code, *name, *console; };
+const GameLanguage kGameLanguages[] = {
+    {"en", "English (US)", "1"}, {"en-gb", "English (UK)", "18"}, {"fr", "Franç" "ais", "2"}, {"de", "Deutsch", "4"},
+    {"it", "Italiano", "5"}, {"nl", "Nederlands", "6"}, {"es", "Españ" "ol", "3"},
+};
+
+// The one played from a copy's (codes): the setting when the copy has it, else Windows' language when it has that,
+// else its English.
+const GameLanguage& game_language(const std::vector<std::string>& codes) {
+    auto has = [&](const std::string& code) { return std::find(codes.begin(), codes.end(), code) != codes.end(); };
+    std::string wanted = setting("game_language", "auto");
+    if (!has(wanted)) {
+        const LANGID windows = GetUserDefaultUILanguage();
+        switch (PRIMARYLANGID(windows)) {
+        case LANG_ITALIAN: wanted = "it"; break;
+        case LANG_FRENCH: wanted = "fr"; break;
+        case LANG_GERMAN: wanted = "de"; break;
+        case LANG_DUTCH: wanted = "nl"; break;
+        case LANG_SPANISH: wanted = "es"; break;
+        default: wanted = SUBLANGID(windows) == SUBLANG_ENGLISH_US ? "en" : "en-gb";
+        }
+        if (!has(wanted)) wanted = has("en") ? "en" : "en-gb";
+    }
+    for (const GameLanguage& language : kGameLanguages)
+        if (wanted == language.code) return language;
+    return kGameLanguages[0];
 }
 
 // --- colours and small helpers (mc3port's, the accent gold instead of red) ---
@@ -477,7 +786,7 @@ struct Bind {
 };
 constexpr Bind kBinds[16] = {
     {"bind_move_up", "W", "LS"},   {"bind_move_down", "S", "LS"}, {"bind_move_left", "A", "LS"}, {"bind_move_right", "D", "LS"},
-    {"bind_cross", "Space", "X"},  {"bind_circle", "C", "O"},     {"bind_square", "F", "S"},     {"bind_triangle", "E", "T"},
+    {"bind_cross", "Space", "X"},  {"bind_circle", "Left Shift", "O"}, {"bind_square", "F", "S"},     {"bind_triangle", "E", "T"},
     {"bind_l", "Q", "L"},          {"bind_r", "R", "R"},          {"bind_start", "Return", "ST"}, {"bind_select", "Tab", "SE"},
     {"bind_up", "Up", "DU"},       {"bind_down", "Down", "DD"},   {"bind_left", "Left", "DL"},   {"bind_right", "Right", "DR"},
 };
@@ -498,17 +807,23 @@ constexpr StyleValue kStyleValues[] = {
 };
 enum { kStyleOriginal, kStyleEnhanced, kStyleCustom };
 
-struct Trail {
-    float x, y, speed, length;
-    ImU32 colour;
-};
-
 class Launcher {
 public:
     int run();
 
+    // The game's menu (launcher_game.h): the same pages over the paused game, in the overlay's ImGui frame and on its
+    // GPU device. `apply`: a setting the game takes at once when told (the resolution, full screen, the stats).
+    explicit Launcher(bool in_game = false) : in_game_(in_game) {}
+    void init_in_game(SDL_GPUDevice* device, void (*apply)(const char* key));
+    void open_in_game();
+    void frame_in_game(int width, int height);
+    bool rebind_event(const SDL_Event& event);
+    bool take_resume() { return std::exchange(resume_, false); }
+    bool take_leave() { return std::exchange(leave_, false); }
+    bool take_exit() { return std::exchange(exit_, false); }
+
 private:
-    enum class Page { kPlay, kSettings, kControls, kAbout, kQuit };
+    enum class Page { kPlay, kSettings, kControls, kAbout, kQuit, kExit };   // (kExit: the game's menu, started by the launcher: quit both)
 
     bool start();
     void stop();
@@ -522,6 +837,9 @@ private:
     bool run_tool(const std::wstring& command, bool making);
     void setup_rows();
     void cancel_setup();
+    void update_row();
+    bool update_available();
+    void page_update();
     void frame(float now, float dt);
     void header(float since);
     void panel(float now);
@@ -573,8 +891,14 @@ private:
     void row(const char* heading, const char* detail, float control = 270);
     bool segmented(const char* id, const char* const* labels, int count, int* current, const char* const* details = nullptr, float wide = 0);
     bool slider(const char* id, float* value, float minimum, float maximum, const char* format);
+    // A drop-down list on the row's right (270 px), after row().
+    bool combo(const char* id, const char* const* items, int count, int* current);
+    // ImGui::SliderFloat with its text hidden and the value drawn beside the grab, on the side with more room, so the
+    // grab never covers it.
+    bool value_slider(const char* id, float* value, float minimum, float maximum, const char* format, float font_size);
 
     void page_play();
+    void page_paused();   // the game's menu: in place of Play
     void page_settings();
     void page_controls();
     void page_about();
@@ -587,6 +911,18 @@ private:
     void choice(const char* key, const char* def, const char* const* values, const char* const* labels, int count,
                 const char* const* details = nullptr, float wide = 0);
     void number(const char* key, float def, float minimum, float maximum, const char* format);
+
+    // A setting just changed: the game is told about the ones it takes at once (in_game_).
+    void changed(const char* key) {
+        if (in_game_ && apply_) apply_(key);
+    }
+
+    const bool in_game_;
+    void (*apply_)(const char* key) = nullptr;
+    bool resume_ = false, leave_ = false;   // the game's menu: Resume, Back to the launcher (or Quit)
+    bool exit_ = false;                     // the game's menu: Quit the game, the launcher too
+    bool start_armed_ = false;   // the game's menu: Start resumes once the Start that opened it (Select+Start) is let go
+    float opened_at_ = 0;        // (when it opened: the pad reaches ImGui a frame late, so a held Start first shows as a press)
 
     SDL_Window* window_ = nullptr;
     SDL_GPUDevice* device_ = nullptr;
@@ -617,6 +953,12 @@ private:
     std::string chosen_copy_, chosen_pup_;   // UTF-8
     bool prepare_auto_ = false;              // ABYSS_LAUNCHER_PREPARE: started by a script, which waits for the end
     std::string game_version_;
+    std::vector<std::string> game_languages_;   // the copy's (game_language)
+    UpdateCheck updates_;
+    std::thread update_thread_;
+    bool update_prompt_ = false, update_prompt_shown_ = false;   // the new version's notice, over Play once a start
+    bool change_copy_ = false;                  // Play's Change copy: the first run's rows again, over the game already made
+    std::string title_id_ = "PCSA00029";        // the copy's own: the US release, or PCSF00012, the European (its param.sfo)
 
     bool menu_has_focus_ = true, focus_panel_ = false, left_pending_ = false;
     int menu_cursor_ = 0;
@@ -638,8 +980,20 @@ private:
     ImDrawList* list_ = nullptr;
     ImVec2 origin_;  // panel content top left
     float panel_width_ = 0, cursor_ = 0, row_extra_ = 0;
+    // The page's column runs from the top to the bottom bar; a longer page scrolls in it (the wheel, or the selection
+    // kept in sight). view_top_/view_bottom_: the part of the screen the page shows.
+    float scroll_ = 0, scroll_target_ = 0, view_top_ = 0, view_bottom_ = 0;
+    Page scroll_page_ = Page::kPlay;
+    int scroll_tab_ = 0;
+    ImGuiID scrolled_to_ = 0;  // the selection last brought into sight
+    // The page's items come in one after another: each title, row and button counts one (enter_item).
+    void enter_item();
+    int item_count_ = 0;
+    float item_shift_ = 0, page_alpha_ = 1;
+    // A torch's light over the background: it follows the mouse, and wanders by itself when the mouse rests.
+    ImVec2 torch_{-1, -1}, last_mouse_{-1, -1};
+    float mouse_moved_at_ = -100;
     std::unordered_map<ImGuiID, float> anims_;
-    std::vector<Trail> trails_;
     std::vector<ImVec4> motes_;
 };
 
@@ -686,6 +1040,14 @@ bool Launcher::start() {
     style.Colors[ImGuiCol_FrameBgActive] = ImVec4(1, 1, 1, 0.16f);
     style.Colors[ImGuiCol_SliderGrab] = ImGui::ColorConvertU32ToFloat4(kGold);
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1, 0.82f, 0.4f, 1);
+    // The drop-down lists (the internal resolution), as mc3port's in red.
+    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.07f, 0.06f, 0.05f, 0.97f);
+    style.Colors[ImGuiCol_Header] = ImGui::ColorConvertU32ToFloat4(kGold);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.89f, 0.66f, 0.17f, 0.7f);
+    style.Colors[ImGuiCol_HeaderActive] = ImGui::ColorConvertU32ToFloat4(kGoldDark);
+    style.Colors[ImGuiCol_Button] = ImVec4(1, 1, 1, 0.07f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.89f, 0.66f, 0.17f, 0.6f);
+    style.Colors[ImGuiCol_Border] = ImVec4(1, 1, 1, 0.1f);
     style.Colors[ImGuiCol_NavCursor] = ImVec4(0, 0, 0, 0);  // the launcher draws its own selection
     ImGui_ImplSDL3_InitForSDLGPU(window_);
     ImGui_ImplSDL3_SetGamepadMode(ImGui_ImplSDL3_GamepadMode_AutoAll);  // every controller, not only the first
@@ -694,15 +1056,18 @@ bool Launcher::start() {
     info.ColorTargetFormat = format_;
     if (!ImGui_ImplSDLGPU3_Init(&info)) return false;
     load_fonts();
-    std::srand(static_cast<unsigned>(SDL_GetPerformanceCounter()));   // (which of our backgrounds, the dust and the trails)
+    std::srand(static_cast<unsigned>(SDL_GetPerformanceCounter()));   // (which of our backgrounds, and the dust)
     load_art();
-    // The first time: Enhanced, as the other ports start (the game alone starts on its own defaults).
-    if (!settings_has("launcher_style_custom")) apply_style(kStyleEnhanced);
+    // The first time: Enhanced, as the other ports start (the game alone starts on its own defaults), unless a style
+    // key was already set from outside (RecompLauncher's settings).
+    const bool style_key_set = std::any_of(std::begin(kStyleValues), std::end(kStyleValues), [](const StyleValue& v) { return settings_has(v.key); });
+    if (!settings_has("launcher_style_custom") && !style_key_set) apply_style(kStyleEnhanced);
     return true;
 }
 
 void Launcher::stop() {
     if (setup_thread_.joinable()) cancel_setup();   // closing the launcher ends the tools and compilers too
+    if (update_thread_.joinable()) update_thread_.join();
     if (device_) SDL_WaitForGPUIdle(device_);
     if (ImGui::GetCurrentContext()) {
         ImGui_ImplSDLGPU3_Shutdown();
@@ -776,87 +1141,64 @@ SDL_GPUTexture* Launcher::make_texture(const unsigned char* rgba, int width, int
     return texture;
 }
 
-// The background and the logo, from the player's own copy: sce_sys/pic0.png (the game's picture, blurred here: made
-// small and averaged, the GPU's filter does the rest) and sce_sys/livearea/contents/startup.png (its logo). Until
+// The background and the logo, from the player's own copy: sce_sys/pic0.png (the game's picture, shown sharp) and
+// sce_sys/livearea/contents/startup.png (its logo). Until
 // there is a copy, one of abyssport's own pictures (art/bg_*.jpg), chosen at random. The
 // emblem beside the port's name is always ours.
+// A picture as RGBA, the file read whole first: the runtime's stb decodes from memory only (in the game's menu).
+unsigned char* load_rgba(const fs::path& file, int* w, int* h) {
+    std::ifstream in(file, std::ios::binary);
+    const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    int n = 0;
+    return bytes.empty() ? nullptr : stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()), static_cast<int>(bytes.size()), w, h, &n, 4);
+}
+
 void Launcher::load_art() {
-    int w = 0, h = 0, n = 0;
+    int w = 0, h = 0;
     if (!emblem_) {
-        if (unsigned char* emblem = stbi_load((exe_directory_ / "art" / "emblem.png").string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* emblem = load_rgba(exe_directory_ / "art" / "emblem.png", &w, &h)) {
             emblem_ = make_texture(emblem, w, h);
             stbi_image_free(emblem);
         }
-        if (unsigned char* art = stbi_load((exe_directory_ / "art" / "pad.png").string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* art = load_rgba(exe_directory_ / "art" / "pad.png", &w, &h)) {
             pad_art_ = make_texture(art, w, h);
             stbi_image_free(art);
         }
-        if (unsigned char* art = stbi_load((exe_directory_ / "art" / "pad_bumpers.png").string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* art = load_rgba(exe_directory_ / "art" / "pad_bumpers.png", &w, &h)) {
             pad_bumpers_ = make_texture(art, w, h);
             stbi_image_free(art);
         }
     }
-    if (!game_ready_) {
+    const auto own_background = [&] {
         static const char* const kOwn[] = {"bg_temple.jpg", "bg_chasm.jpg", "bg_cave.jpg", "bg_ruins.jpg"};
-        if (unsigned char* picture = stbi_load((exe_directory_ / "art" / kOwn[std::rand() % 4]).string().c_str(), &w, &h, &n, 4)) {
+        if (unsigned char* picture = load_rgba(exe_directory_ / "art" / kOwn[std::rand() % 4], &w, &h)) {
             background_ = make_texture(picture, w, h);
             background_width_ = w;
             background_height_ = h;
             stbi_image_free(picture);
         }
+    };
+    if (!game_ready_) {
+        own_background();
         return;
     }
     const fs::path sys = game_directory_ / "fs" / "app0" / "sce_sys";
-    if (unsigned char* picture = stbi_load((sys / "pic0.png").string().c_str(), &w, &h, &n, 4)) {
+    unsigned char* picture = in_game_ ? nullptr : load_rgba(sys / "pic0.png", &w, &h);   // (in the game: the game is the background)
+    if (picture) {
         if (background_) SDL_ReleaseGPUTexture(device_, background_);
         background_is_game_ = true;
-        const int sw = 96, sh = std::max(1, 96 * h / std::max(1, w));
-        std::vector<float> small(static_cast<size_t>(sw * sh * 3), 0.0f), pass(small.size());
-        for (int y = 0; y < sh; ++y) {
-            for (int x = 0; x < sw; ++x) {  // the box of source pixels this one covers
-                const int x0 = x * w / sw, x1 = std::max(x0 + 1, (x + 1) * w / sw), y0 = y * h / sh, y1 = std::max(y0 + 1, (y + 1) * h / sh);
-                float sum[3] = {};
-                for (int v = y0; v < y1; ++v) {
-                    for (int u = x0; u < x1; ++u) {
-                        for (int c = 0; c < 3; ++c) sum[c] += picture[(v * w + u) * 4 + c];
-                    }
-                }
-                for (int c = 0; c < 3; ++c) small[(y * sw + x) * 3 + c] = sum[c] / static_cast<float>((x1 - x0) * (y1 - y0));
-            }
-        }
-        for (int round = 0; round < 3; ++round) {  // three box blurs: close to a gaussian
-            for (int axis = 0; axis < 2; ++axis) {
-                for (int y = 0; y < sh; ++y) {
-                    for (int x = 0; x < sw; ++x) {
-                        for (int c = 0; c < 3; ++c) {
-                            float sum = 0;
-                            for (int d = -2; d <= 2; ++d) {
-                                const int u = std::clamp(axis ? x : x + d, 0, sw - 1), v = std::clamp(axis ? y + d : y, 0, sh - 1);
-                                sum += small[(v * sw + u) * 3 + c];
-                            }
-                            pass[(y * sw + x) * 3 + c] = sum / 5;
-                        }
-                    }
-                }
-                small.swap(pass);
-            }
-        }
-        std::vector<unsigned char> rgba(static_cast<size_t>(sw * sh * 4));
-        for (int i = 0; i < sw * sh; ++i) {
-            for (int c = 0; c < 3; ++c) rgba[i * 4 + c] = static_cast<unsigned char>(std::clamp(small[i * 3 + c], 0.0f, 255.0f));
-            rgba[i * 4 + 3] = 255;
-        }
-        background_ = make_texture(rgba.data(), sw, sh);
+        background_ = make_texture(picture, w, h);   // as it is, sharp: the screen's darkening keeps the texts readable
         background_width_ = w;
         background_height_ = h;
         stbi_image_free(picture);
     }
-    if (unsigned char* logo = stbi_load((sys / "livearea" / "contents" / "startup.png").string().c_str(), &w, &h, &n, 4)) {
+    if (unsigned char* logo = load_rgba(sys / "livearea" / "contents" / "startup.png", &w, &h)) {
         logo_ = make_texture(logo, w, h);
         logo_width_ = w;
         logo_height_ = h;
         stbi_image_free(logo);
     }
+    if (!background_ && !in_game_) own_background();  // a copy without its picture: one of ours, as before there is a copy
 }
 
 // Where the game is: ABYSS_GAME_DIR, the build tree's game/library (the launcher runs from build/<preset>), or the
@@ -881,6 +1223,27 @@ void Launcher::find_game() {
             char line[32] = {};
             if (std::fgets(line, sizeof(line), file)) game_version_ = line;
             while (!game_version_.empty() && std::isspace(static_cast<unsigned char>(game_version_.back()))) game_version_.pop_back();
+            std::fclose(file);
+        }
+        // the languages of the copy's text: the names in its gamedata.bin's index (an HG2 archive, the index's size
+        // at +12), game/strings/onscreen.<language>.strings.bsp -- the US copy: en fr es; the European one: en-gb fr de it nl
+        game_languages_.clear();
+        {   // which release the copy is (its library is under PCSA00029 either way: the same code): its param.sfo's TITLE_ID
+            std::ifstream sfo(game_directory_ / "fs" / "app0" / "sce_sys" / "param.sfo", std::ios::binary);
+            const std::string bytes((std::istreambuf_iterator<char>(sfo)), std::istreambuf_iterator<char>());
+            title_id_ = bytes.find("PCSF00012") != std::string::npos ? "PCSF00012" : "PCSA00029";
+        }
+        if (FILE* file = _wfopen((game_directory_ / "fs" / "app0" / "gamedata.bin").c_str(), L"rb")) {
+            unsigned char head[16] = {};
+            if (std::fread(head, 1, 16, file) == 16 && !std::memcmp(head, "HG2", 4)) {
+                std::string index(head[12] | head[13] << 8 | head[14] << 16 | static_cast<size_t>(head[15]) << 24, char());
+                index.resize(std::fread(index.data(), 1, std::min<size_t>(index.size(), 64u << 20), file));
+                const std::string prefix = "game/strings/onscreen.", suffix = ".strings.bsp";
+                for (size_t at = index.find(prefix); at != std::string::npos; at = index.find(prefix, at + 1)) {
+                    const size_t start = at + prefix.size(), end = index.find(suffix, start);
+                    if (end != std::string::npos && end - start < 8) game_languages_.push_back(index.substr(start, end - start));
+                }
+            }
             std::fclose(file);
         }
     }
@@ -976,10 +1339,12 @@ bool Launcher::run_tool(const std::wstring& command, bool making) {
 void Launcher::start_setup() {
     const Texts& t = T();
     const fs::path base = setup_base();
-    const fs::path library = base / "library";
-    // the game already made: its own library, wherever it is
-    const fs::path recomp = game_ready_ ? game_directory_ : library / "decrypted" / "PCSA00029" / "recomp";
-    const int need_gb = game_ready_ ? 1 : 8;   // the library is 3.6 GB, the firmware and the game's copy decrypted on the way
+    // made again from a copy: the first time, or another copy over the game already made (in its own library, wherever it is)
+    const bool remake = !game_ready_ || change_copy_;
+    const fs::path library = game_ready_ ? game_directory_.parent_path().parent_path().parent_path() : base / "library";
+    // the game already made, only compiled again: its own library
+    const fs::path recomp = remake ? library / "decrypted" / "PCSA00029" / "recomp" : game_directory_;
+    const int need_gb = remake ? 8 : 1;   // the library is 3.6 GB, the firmware and the game's copy decrypted on the way
     std::error_code error;
     fs::create_directories(base, error);
     const fs::space_info space = fs::space(base, error);
@@ -987,7 +1352,7 @@ void Launcher::start_setup() {
         std::lock_guard<std::mutex> hold(setup_lock_);
         setup_error_.clear();
         setup_tail_.clear();
-        setup_step_ = game_ready_ ? 5 : 0;
+        setup_step_ = remake ? 0 : 5;
         setup_progress_ = 0;
         setup_done_ = setup_cancelled_ = false;
         if (!error && space.available < static_cast<std::uintmax_t>(need_gb) << 30) {
@@ -1007,7 +1372,7 @@ void Launcher::start_setup() {
     auto utf8_path = [](const std::string& s) { return fs::u8path(s); };
     const fs::path python = exe_directory_ / "python" / "python.exe";
     std::vector<std::pair<std::wstring, bool>> commands;
-    if (!game_ready_) {
+    if (remake) {
         commands.push_back({quote(python) + L" -u " + quote(exe_directory_ / "tools" / "make_game.py") + L" " + quote(utf8_path(chosen_copy_)) + L" " +
                                 quote(utf8_path(chosen_pup_)) + L" --library " + quote(library), true});
     }
@@ -1060,11 +1425,13 @@ void Launcher::setup_rows() {
         setup_job_ = nullptr;
         find_game();
         if (game_ready_) settings_load((game_directory_ / "settings.ini").string().c_str());
-        if (game_ready_ && !background_is_game_) load_art();   // the game's own artwork, now that there is a copy of it
+        const bool changed = change_copy_ && game_ready_ && setup_error_.empty() && !setup_cancelled_;
+        if (changed) change_copy_ = false;   // (made: the new copy's picture too)
+        if (game_ready_ && (!background_is_game_ || changed)) { background_is_game_ = false; load_art(); }   // the game's own artwork, now that there is a copy of it
         hold.lock();
     }
     const bool running = setup_running_;
-    if (!game_ready_ && !running) {
+    if ((!game_ready_ || change_copy_) && !running) {
         // the dialogs answer on SDL's thread
         auto picked_copy = [](void* self, const char* const* list, int) {
             if (!list || !list[0]) return;
@@ -1085,6 +1452,20 @@ void Launcher::setup_rows() {
             static const SDL_DialogFileFilter filter = {"PUP", "PUP;pup"};
             SDL_ShowOpenFileDialog(picked_pup, this, window_, &filter, 1, pup.empty() ? nullptr : pup.c_str(), false);
         }
+        if (pup.empty()) {   // where it comes from: Sony's own page for the system software, in the launcher's language (as Vita3K points to it)
+            const ImVec2 at(origin_.x + px(46), origin_.y + cursor_ - px(2));
+            const float button_x = origin_.x + panel_width_ - measure(body_bold_, px(18), t.pup_get).x - px(28);
+            list_->PushClipRect(at, ImVec2(button_x - px(12), at.y + px(40)), true);
+            text(body_, px(17), ImVec2(at.x, at.y + px(6)), kDim, t.pup_where);
+            list_->PopClipRect();
+            if (small_button(t.pup_get, ImVec2(button_x, at.y), "##pupget")) {
+                const std::string language = launcher_language();
+                const char* locale = language == "it" ? "it-it" : language == "pt" ? "pt-br" : language == "es" ? "es-es" : "en-us";
+                const std::string url = std::string("https://www.playstation.com/") + locale + "/support/hardware/psvita/system-software/";
+                ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+            cursor_ += px(44);
+        }
         hold.lock();
     }
     if (running) {
@@ -1103,7 +1484,7 @@ void Launcher::setup_rows() {
         return;
     }
     const std::string failure = setup_error_, tail = setup_tail_;
-    const bool can_start = game_ready_ || (!chosen_copy_.empty() && !chosen_pup_.empty());
+    const bool can_start = (game_ready_ && !change_copy_) || (!chosen_copy_.empty() && !chosen_pup_.empty());
     hold.unlock();
     if (!failure.empty()) {
         status(false, t.failed, failure.c_str(), nullptr, "##failed", true);
@@ -1114,7 +1495,7 @@ void Launcher::setup_rows() {
             cursor_ += px(80);
         }
     }
-    lead(game_ready_ ? t.compile_only : t.duration);
+    lead(game_ready_ && !change_copy_ ? t.compile_only : t.duration);
     if (can_start && big_button(t.prepare, "##prepare", true)) start_setup();
 }
 
@@ -1126,8 +1507,12 @@ void Launcher::start_game() {
     SetEnvironmentVariableA("RECOMP_TITLE", "PCSA00029");
     SetEnvironmentVariableA("RECOMP_GAME_NAME", "Uncharted: Golden Abyss");
     SetEnvironmentVariableA("RECOMP_FS", "fs");
+    // the console's language setting (apputil.c); none found in the copy: the game's own default, English (US), which
+    // the European copy plays as its English (UK)
+    SetEnvironmentVariableA("RECOMP_LANGUAGE", game_languages_.empty() ? nullptr : game_language(game_languages_).console);
     SetEnvironmentVariableA("RECOMP_LOG", "0");
-    SetEnvironmentVariableA("ABYSS_LAUNCHER", "1");  // the in-game menu's Quit reads "Back to the launcher" (overlay.cpp)
+    SetEnvironmentVariableA("ABYSS_LAUNCHER", "1");  // the in-game menu's Quit reads "Back to the launcher"
+    SetEnvironmentVariableW(L"ABYSS_LAUNCHER_DIR", exe_directory_.c_str());  // where the menu finds its letters and pictures
     std::error_code error;
     for (const fs::path& recipes : {exe_directory_ / "shaders.txt", exe_directory_ / ".." / ".." / "res" / "shaders.txt"}) {
         if (fs::exists(recipes, error)) {
@@ -1147,7 +1532,7 @@ void Launcher::start_game() {
         startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     }
     PROCESS_INFORMATION process = {};
-    const bool started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, log != INVALID_HANDLE_VALUE, 0, nullptr, game_directory_.c_str(), &startup, &process);
+    const bool started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, log != INVALID_HANDLE_VALUE, CREATE_NO_WINDOW, nullptr, game_directory_.c_str(), &startup, &process);
     if (log != INVALID_HANDLE_VALUE) CloseHandle(log);
     if (!started) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "abyssport", "abyss.exe did not start.", window_);
@@ -1155,8 +1540,14 @@ void Launcher::start_game() {
     }
     SDL_HideWindow(window_);
     WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD exit_code = 0;
+    GetExitCodeProcess(process.hProcess, &exit_code);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
+    if (exit_code == 3) {  // the player quit the game, not back to the launcher: it closes as well
+        done_ = true;
+        return;
+    }
     SDL_ShowWindow(window_);
     SDL_RaiseWindow(window_);
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
@@ -1240,11 +1631,13 @@ float Launcher::glyph(const char* name, ImVec2 at, float h) {
 }
 
 void Launcher::title(const char* str) {
+    enter_item();
     text(black_, px(48), ImVec2(origin_.x, origin_.y + cursor_), kInk, str);
     cursor_ += px(56);
 }
 
 void Launcher::lead(const char* str) {
+    enter_item();
     const ImVec2 size = measure(body_, px(21), str, panel_width_);
     text(body_, px(21), ImVec2(origin_.x, origin_.y + cursor_), kDim, str, panel_width_);
     cursor_ += size.y + px(20);
@@ -1268,6 +1661,7 @@ bool Launcher::small_button(const char* label, ImVec2 at, const char* id, ImVec2
 }
 
 bool Launcher::status(bool good, const char* heading, const char* detail, const char* button_label, const char* id, bool pulse) {
+    enter_item();
     const float height = px(64);
     const ImVec2 a(origin_.x, origin_.y + cursor_), b(origin_.x + panel_width_, a.y + height);
     const ImU32 accent = good ? kGreen : kAmber;
@@ -1275,10 +1669,6 @@ bool Launcher::status(bool good, const char* heading, const char* detail, const 
     const ImVec2 dot(a.x + px(26), a.y + height / 2);
     list_->AddCircleFilled(dot, px(6), fade(accent));
     list_->AddCircleFilled(dot, px(12), fade(accent, 0.18f));
-    if (pulse) {
-        const float p = std::fmod(static_cast<float>(ImGui::GetTime()), 1.8f) / 1.8f;
-        list_->AddCircle(dot, px(12) + px(14) * p, fade(accent, 0.6f * (1 - p)), 0, px(2));
-    }
     const float button_x = button_label ? b.x - measure(body_bold_, px(18), button_label).x - px(28) - px(14) : b.x;
     list_->PushClipRect(a, ImVec2(button_x - px(12), b.y), true);  // texts stop before the button
     text(body_bold_, px(21), ImVec2(a.x + px(46), a.y + px(9)), kInk, heading);
@@ -1294,6 +1684,7 @@ bool Launcher::status(bool good, const char* heading, const char* detail, const 
 }
 
 bool Launcher::big_button(const char* label, const char* id, bool pulse) {
+    enter_item();
     const ImVec2 size = measure(black_, px(40), label);
     const ImVec2 a(origin_.x, origin_.y + cursor_ + px(10)), b(a.x + size.x + px(110), a.y + px(64));
     ImGui::SetCursorScreenPos(a);
@@ -1302,13 +1693,6 @@ bool Launcher::big_button(const char* label, const char* id, bool pulse) {
     const float hot = anim(ImGui::GetItemID(), ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride) || nav_selected());
     if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     focus_frame(ImVec2(origin_.x - px(24), a.y - px(8)), ImVec2(origin_.x + panel_width_ + px(14), b.y + px(8)));
-    if (pulse) {
-        const float p = std::fmod(static_cast<float>(ImGui::GetTime()), 2.2f) / 2.2f / 0.7f;
-        if (p < 1) {
-            const float grow = px(18) * p;
-            skewed_rect(list_, ImVec2(a.x - grow, a.y - grow), ImVec2(b.x + grow, b.y + grow), fade(kGold, 0.45f * (1 - p)), fade(kGold, 0.45f * (1 - p)));
-        }
-    }
     skewed_rect(list_, a, b, mix(kGold, IM_COL32(255, 206, 96, 255), hot * 0.6f), mix(kGoldDark, kGold, hot * 0.5f));
     text(black_, px(40), ImVec2(a.x + px(55) + px(7), a.y + px(10)), IM_COL32(18, 14, 6, 255), label);
     cursor_ += px(90);
@@ -1316,6 +1700,7 @@ bool Launcher::big_button(const char* label, const char* id, bool pulse) {
 }
 
 bool Launcher::tabs(const char* const* labels, int count, int* current) {
+    enter_item();
     float x = origin_.x;
     bool changed = false;
     for (int i = 0; i < count; ++i) {
@@ -1346,12 +1731,15 @@ bool Launcher::tabs(const char* const* labels, int count, int* current) {
 }
 
 void Launcher::row(const char* heading, const char* detail, float control) {
+    enter_item();
     text(body_bold_, px(20), ImVec2(origin_.x, origin_.y + cursor_ + px(4)), kInk, heading);
     if (!detail) return;
-    // Left of the control (`control` wide): a longer detail wraps, and the row grows by the extra lines.
-    const float wrap = panel_width_ - px(control + 20);
-    text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + px(29)), kDim, detail, wrap);
-    row_extra_ = std::max(0.0f, measure(body_, px(17), detail, wrap).y - px(22));
+    // Left of the control (`control` wide), or under a wide one across the whole row (squeezed beside it, it took four
+    // lines): a longer detail wraps, and the row grows by the extra lines.
+    const bool under = control >= 330;
+    const float wrap = under ? panel_width_ : panel_width_ - px(control + 20), top = px(under ? 60 : 29);
+    text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + top), kDim, detail, wrap);
+    row_extra_ = std::max(0.0f, measure(body_, px(17), detail, wrap).y - px(22) + top - px(29));
 }
 
 bool Launcher::segmented(const char* id, const char* const* labels, int count, int* current, const char* const* details, float wide) {
@@ -1405,6 +1793,39 @@ bool Launcher::segmented(const char* id, const char* const* labels, int count, i
     return changed;
 }
 
+bool Launcher::value_slider(const char* id, float* value, float minimum, float maximum, const char* format,
+                            float font_size) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 0));
+    const bool changed = ImGui::SliderFloat(id, value, minimum, maximum, format);
+    ImGui::PopStyleColor();
+    char label[32];
+    std::snprintf(label, sizeof(label), format, *value);
+    const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax(), size = measure(body_bold_, font_size, label);
+    const float grab = ImGui::GetStyle().GrabMinSize, t = std::clamp((*value - minimum) / (maximum - minimum), 0.0f, 1.0f);
+    const float centre = a.x + 2 + grab / 2 + t * (b.x - a.x - 4 - grab);  // ImGui's grab, 2 px in from the frame
+    const float x = t < 0.5f ? centre + grab / 2 + px(8) : centre - grab / 2 - px(8) - size.x;
+    text(body_bold_, font_size, ImVec2(x, a.y + (b.y - a.y - size.y) / 2), kInk, label);
+    return changed;
+}
+
+bool Launcher::combo(const char* id, const char* const* items, int count, int* current) {
+    ImGui::SetCursorScreenPos(ImVec2(origin_.x + panel_width_ - px(270), origin_.y + cursor_ + px(8)));
+    ImGui::PushItemWidth(px(270));
+    ImGui::PushFont(body_bold_, px(18));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(px(8), px(5)));
+    claim_focus();
+    const bool changed = ImGui::Combo(id, current, items, count);
+    focus_ring();
+    focus_frame(ImVec2(origin_.x - px(24), origin_.y + cursor_), ImVec2(origin_.x + panel_width_ + px(14), origin_.y + cursor_ + px(52) + row_extra_));
+    ImGui::PopStyleVar();
+    ImGui::PopFont();
+    ImGui::PopItemWidth();
+    cursor_ += px(58) + row_extra_;
+    row_extra_ = 0;
+    list_->AddLine(ImVec2(origin_.x, origin_.y + cursor_ - px(6)), ImVec2(origin_.x + panel_width_, origin_.y + cursor_ - px(6)), fade(IM_COL32(255, 255, 255, 16)));
+    return changed;
+}
+
 bool Launcher::slider(const char* id, float* value, float minimum, float maximum, const char* format) {
     const float width = px(270);
     ImGui::SetCursorScreenPos(ImVec2(origin_.x + panel_width_ - width, origin_.y + cursor_ + px(8)));
@@ -1412,7 +1833,7 @@ bool Launcher::slider(const char* id, float* value, float minimum, float maximum
     ImGui::PushFont(body_bold_, px(18));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(px(8), px(5)));
     claim_focus();
-    bool changed = ImGui::SliderFloat(id, value, minimum, maximum, format);
+    bool changed = value_slider(id, value, minimum, maximum, format, px(18));
     focus_ring();
     changed |= step_slider(value, minimum, maximum);
     focus_frame(ImVec2(origin_.x - px(24), origin_.y + cursor_), ImVec2(origin_.x + panel_width_ + px(14), origin_.y + cursor_ + px(46) + row_extra_));
@@ -1476,6 +1897,7 @@ void Launcher::choice(const char* key, const char* def, const char* const* value
     if (segmented(key, labels, count, &current, details, wide)) {
         settings_set_str(key, values[current]);
         settings_save();
+        changed(key);
     }
 }
 
@@ -1485,6 +1907,7 @@ void Launcher::number(const char* key, float def, float minimum, float maximum, 
     if (slider(id.c_str(), &value, minimum, maximum, format)) {
         settings_set_float(key, std::round(value * 100) / 100);
         settings_save();
+        changed(key);
     }
 }
 
@@ -1492,7 +1915,8 @@ void Launcher::number(const char* key, float def, float minimum, float maximum, 
 std::string Launcher::auto_scale() const {
     int lines = 1080;
     SDL_Rect bounds;
-    if (const SDL_DisplayID display = SDL_GetDisplayForWindow(window_); display && SDL_GetDisplayBounds(display, &bounds)) lines = bounds.h;
+    const SDL_DisplayID display = window_ ? SDL_GetDisplayForWindow(window_) : SDL_GetPrimaryDisplay();
+    if (display && SDL_GetDisplayBounds(display, &bounds)) lines = bounds.h;
     return std::to_string(std::clamp(static_cast<int>(std::ceil(lines / 544.0 - 0.05)), 1, 6));
 }
 
@@ -1521,6 +1945,9 @@ void Launcher::apply_style(int chosen) {
         }
     }
     settings_save();
+    if (chosen != kStyleCustom) {
+        for (const StyleValue& value : kStyleValues) changed(value.key);
+    }
 }
 
 void Launcher::style_row() {
@@ -1534,17 +1961,34 @@ void Launcher::style_row() {
 
 void Launcher::page_play() {
     const Texts& t = T();
+    if (!update_prompt_shown_ && !in_game_ && update_available()) update_prompt_ = update_prompt_shown_ = true;
+    if (update_prompt_) {
+        page_update();
+        return;
+    }
     const bool ready = game_ready_ && program_ready_;
     title(ready ? t.ready_title : t.setup_title);
     lead(ready ? t.ready_lead : t.setup_lead);
-    std::string detail = "Uncharted: Golden Abyss \xC2\xB7 PCSA00029";
+    std::string detail = "Uncharted: Golden Abyss \xC2\xB7 " + title_id_;
     if (!game_version_.empty()) detail += " \xC2\xB7 " + game_version_;
-    if (tools_ready_ && !ready) {   // a release: the launcher makes the game itself
-        if (game_ready_) status(true, t.game_ok, detail.c_str(), nullptr, "##game");
+    if (tools_ready_ && (!ready || change_copy_)) {   // a release: the launcher makes the game itself
+        if (game_ready_ && !change_copy_ && status(true, t.game_ok, detail.c_str(), t.change_copy, "##game")) {
+            change_copy_ = true;
+            chosen_copy_.clear();
+        }
         setup_rows();
+        if (change_copy_ && !setup_running_) {   // back to the game as it is
+            cursor_ += px(6);
+            if (small_button(t.cancel, ImVec2(origin_.x, origin_.y + cursor_), "##keepcopy")) { change_copy_ = false; chosen_copy_.clear(); }
+            cursor_ += px(48);
+        }
         return;
     }
-    status(game_ready_, game_ready_ ? t.game_ok : t.game_missing, game_ready_ ? detail.c_str() : t.game_missing_detail, nullptr, "##game", !game_ready_);
+    if (status(game_ready_, game_ready_ ? t.game_ok : t.game_missing, game_ready_ ? detail.c_str() : t.game_missing_detail,
+               game_ready_ && tools_ready_ ? t.change_copy : nullptr, "##game", !game_ready_)) {
+        change_copy_ = true;   // the copy and the firmware chosen again, then Prepare
+        chosen_copy_.clear();
+    }
     if (!program_ready_) status(false, t.program_missing, t.program_missing_detail, nullptr, "##program", true);
     status(pad_connected_, pad_connected_ ? t.pad_on : t.pad_off, pad_connected_ ? t.pad_on_detail : t.pad_off_detail, nullptr, "##pad");
     const int current = style();
@@ -1554,6 +1998,7 @@ void Launcher::page_play() {
         menu_cursor_ = 1;
         page_since_ = static_cast<float>(ImGui::GetTime());
     }
+    cursor_ = std::max(cursor_, view_bottom_ - origin_.y - px(130));  // Play at the foot of the column
     if (ready && big_button(t.play, "##play", true)) play_ = true;
 }
 
@@ -1572,10 +2017,14 @@ void Launcher::page_settings() {
         row(t.window_mode, t.window_detail);
         choice("fullscreen", "0", off_on, t.window_names, 2);
         const char* scale_values[] = {"1", "2", "3", "4", "5", "6"};
-        const char* scale_labels[] = {"1x", "2x", "3x", "4x", "5x", "6x"};
-        const char* scale_details[] = {"544p", "1088p", "1632p", "2176p", "2720p", "3264p"};
-        row(t.resolution, t.resolution_detail, 400);
-        choice("render_scale", "1", scale_values, scale_labels, 6, scale_details, 400);
+        const char* scale_labels[] = {"1x \xC2\xB7 544p", "2x \xC2\xB7 1088p", "3x \xC2\xB7 1632p", "4x \xC2\xB7 2176p", "5x \xC2\xB7 2720p", "6x \xC2\xB7 3264p"};
+        row(t.resolution, t.resolution_detail);
+        int scale = std::clamp(std::atoi(setting("render_scale", "1").c_str()), 1, 6) - 1;
+        if (combo("##render_scale", scale_labels, 6, &scale)) {
+            settings_set_str("render_scale", scale_values[scale]);
+            settings_save();
+            changed("render_scale");
+        }
         const char* rate_values[] = {"30", "60"};
         row(t.frame_rate, t.frame_rate_detail);
         choice("frame_rate", "30", rate_values, rate_values, 2);
@@ -1600,9 +2049,32 @@ void Launcher::page_settings() {
         number("fov", 1.0f, 0.8f, 1.5f, "%.2f");
         row(t.view_distance, t.view_distance_detail);
         number("view_distance", 1.0f, 1.0f, 3.0f, "%.2f");
+        const char* osd_values[] = {"0", "1", "2"};
+        row(t.osd, t.osd_detail, 330);
+        choice("osd", "0", osd_values, t.osd_names, 3, nullptr, 330);
         const char* language_values[] = {"auto", "it", "en", "pt", "es"};
         row(t.language, nullptr, 420);
         choice("launcher_language", "auto", language_values, t.language_names, 5, nullptr, 420);
+        row(t.check_updates, t.check_updates_detail);
+        choice("check_updates", "1", off_on, no_yes, 2);
+        if (!game_languages_.empty()) {
+            // Automatic, then the copy's languages (the US copy: English, French, Spanish; the European one: English,
+            // French, German, Italian, Dutch)
+            std::vector<const char*> values = {"auto"}, labels = {t.language_names[0]};
+            for (const GameLanguage& language : kGameLanguages) {
+                if (std::find(game_languages_.begin(), game_languages_.end(), language.code) == game_languages_.end()) continue;
+                values.push_back(language.code);
+                labels.push_back(language.name);
+            }
+            const std::string now = setting("game_language", "auto");
+            int current = 0;
+            for (size_t i = 0; i < values.size(); ++i) if (now == values[i]) current = static_cast<int>(i);
+            row(t.game_language, t.game_language_detail);
+            if (combo("##game_language", labels.data(), static_cast<int>(labels.size()), &current)) {
+                settings_set_str("game_language", values[current]);
+                settings_save();
+            }
+        }
     } else {
         row(t.volume, nullptr);
         number("volume", 1.0f, 0, 1, "%.2f");
@@ -1700,6 +2172,9 @@ void Launcher::page_controls() {
         choice("shoulder_buttons", "triggers", shoulder_values, t.shoulder_names, 2);
         row(t.gyro, t.gyro_detail);
         choice("gyro", "1", off_on, no_yes, 2);
+        const char* layout_values[] = {"0", "1", "2"};
+        row(t.layout, t.layout_detail, 400);
+        choice("controller_layout", "0", layout_values, t.layout_names, 3, nullptr, 400);
     } else {
         how_page(static_cast<float>(ImGui::GetTime()));
     }
@@ -1717,9 +2192,10 @@ void Launcher::how_page(float now) {
     cursor_ += measure(body_, px(17), t.how_lead, panel_width_).y + px(4);
 
     // What the tutorial is for: chosen here, first guessed from the controller connected (a PlayStation one: the
-    // DualSense's; any other: the Xbox's; none: keyboard and mouse).
+    // DualSense's; any other: the Xbox's; none: RecompLauncher's {pad} if it gave one, else keyboard and mouse).
     if (how_device_ < 0) {
-        how_device_ = 0;
+        const char* launcher_pad = std::getenv("RECOMPLAUNCHER_PAD");
+        how_device_ = !launcher_pad ? 0 : !std::strcmp(launcher_pad, "playstation") ? 1 : !std::strcmp(launcher_pad, "xbox") ? 2 : 0;
         int count = 0;
         if (SDL_JoystickID* pads = SDL_GetGamepads(&count)) {
             if (count > 0) {
@@ -2136,6 +2612,59 @@ void Launcher::how_page(float now) {
     cursor_ += line * 3 + px(4);
 }
 
+// About's row: looking, up to date, or the new version with its page (nothing when the check is off or failed).
+void Launcher::update_row() {
+    const Texts& t = T();
+    int state;
+    std::string version, url;
+    {
+        std::lock_guard<std::mutex> lock(updates_.mutex);
+        state = updates_.state, version = updates_.version, url = updates_.url;
+    }
+    if (state == 3 || !settings_int("check_updates", 1)) return;
+    if (state == 2) {
+        char found[96];
+        std::snprintf(found, sizeof(found), t.update_found, version.c_str());
+        if (status(false, found, t.update_sub, t.update_open, "##update")) ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    } else {
+        status(true, state == 0 ? t.checking : t.up_to_date, "", nullptr, "##uptodate");
+    }
+}
+bool Launcher::update_available() {
+    if (!settings_int("check_updates", 1)) return false;
+    std::lock_guard<std::mutex> lock(updates_.mutex);
+    return updates_.state == 2;
+}
+// The new version's notice, over Play once a start: what is new, the release page, or Later.
+void Launcher::page_update() {
+    const Texts& t = T();
+    std::string version, url;
+    std::vector<std::string> points;
+    {
+        std::lock_guard<std::mutex> lock(updates_.mutex);
+        version = updates_.version, url = updates_.url, points = updates_.points;
+    }
+    title(t.update_title);
+    char line[256];
+    std::snprintf(line, sizeof(line), t.update_lead, version.c_str());
+    lead(line);
+    for (const std::string& point : points) {
+        const float wrap = panel_width_ - px(24);
+        const ImVec2 at(origin_.x, origin_.y + cursor_), size = measure(body_, px(18), point.c_str(), wrap);
+        list_->AddRectFilled(ImVec2(at.x + px(2), at.y + px(9)), ImVec2(at.x + px(9), at.y + px(16)), fade(kGold));
+        text(body_, px(18), ImVec2(at.x + px(24), at.y), kInk, point.c_str(), wrap);
+        cursor_ += size.y + px(10);
+    }
+    cursor_ += px(8);
+    if (big_button(t.update_page, "##update_page", false)) ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    lead(t.update_portable_note);
+    if (small_button(t.update_later, ImVec2(origin_.x, origin_.y + cursor_), "##update_later")) {
+        update_prompt_ = false;
+        page_since_ = static_cast<float>(ImGui::GetTime());
+    }
+    cursor_ += px(52);
+}
+
 void Launcher::page_about() {
     const Texts& t = T();
     title(t.about);
@@ -2147,6 +2676,7 @@ void Launcher::page_about() {
         cursor_ += std::max(px(30), measure(body_bold_, px(18), value, wrap).y + px(12));
     };
     fact(t.version, ABYSS_VERSION);
+    update_row();
     fact(t.licence, t.licence_text);   // (the credits are on GitHub: README.md, THIRD_PARTY.md)
     cursor_ += px(6);
     if (game_ready_) {
@@ -2159,6 +2689,10 @@ void Launcher::page_about() {
         }
         cursor_ += px(48);
     }
+    // Never needed to play, and it buys nothing (README, "Supporting the project"): a row among the others, no reminders.
+    if (status(true, t.support, t.support_sub, "Ko-fi", "##kofi")) {
+        ShellExecuteA(nullptr, "open", "https://ko-fi.com/sicksartori", nullptr, nullptr, SW_SHOWNORMAL);
+    }
 }
 
 // --- the screen ---
@@ -2168,34 +2702,53 @@ void Launcher::frame(float now, float dt) {
     const ImVec2 screen(static_cast<float>(width_), static_cast<float>(height_));
     ImDrawList* back = ImGui::GetBackgroundDrawList();
 
-    // The game's picture, blurred, filling the screen and drifting slowly; darkened so the texts read.
+    // The game's picture, filling the screen, still; darkened so the texts read.
     back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(10, 8, 6, 255));
     if (background_) {
         const float picture = static_cast<float>(background_width_) / static_cast<float>(std::max(1, background_height_));
-        const float zoom = 1.08f + 0.03f * std::sin(now * 0.07f);
+        const float zoom = 1.0f;
         float w = screen.x * zoom, h = w / picture;
         if (h < screen.y * zoom) {
             h = screen.y * zoom;
             w = h * picture;
         }
-        const ImVec2 a((screen.x - w) / 2 + px(14) * std::sin(now * 0.05f), (screen.y - h) / 2);
+        const ImVec2 a((screen.x - w) / 2, (screen.y - h) / 2);
         back->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(background_)), a, ImVec2(a.x + w, a.y + h));
     }
     back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(8, 6, 4, 88));
     back->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(screen.x * 0.55f, screen.y), IM_COL32(0, 0, 0, 150), IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 150));
 
-    // Light trails and dust in the air.
-    if (random01() < dt * 3) {
-        const float pick = random01();
-        const ImU32 colour = pick < 0.6f ? IM_COL32(226, 168, 44, 255) : pick < 0.85f ? IM_COL32(255, 226, 160, 255) : IM_COL32(255, 255, 255, 255);
-        trails_.push_back({-px(300), screen.y * (0.55f + 0.37f * random01()), px(900 + 900 * random01()), px(200 + 320 * random01()), colour});
+    // A torch: its warm light follows the mouse, a little behind; while the mouse rests it wanders on its own.
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const bool mouse_valid = ImGui::IsMousePosValid();
+    if (mouse_valid && (mouse.x != last_mouse_.x || mouse.y != last_mouse_.y)) {
+        last_mouse_ = mouse;
+        mouse_moved_at_ = now;
     }
-    for (Trail& trail : trails_) {
-        trail.x += trail.speed * dt;
-        back->AddRectFilledMultiColor(ImVec2(trail.x - trail.length, trail.y), ImVec2(trail.x, trail.y + px(2.5f)),
-                                      trail.colour & ~IM_COL32_A_MASK, trail.colour, trail.colour, trail.colour & ~IM_COL32_A_MASK);
-    }
-    trails_.erase(std::remove_if(trails_.begin(), trails_.end(), [&](const Trail& trail) { return trail.x - trail.length > screen.x; }), trails_.end());
+    const ImVec2 wander(screen.x * (0.38f + 0.2f * std::sin(now * 0.13f)), screen.y * (0.5f + 0.25f * std::sin(now * 0.21f + 1)));
+    const ImVec2 aim = mouse_valid && now - mouse_moved_at_ < 4 ? mouse : wander;
+    torch_ = torch_.x < 0 ? aim : ImLerp(torch_, aim, std::min(1.0f, dt * 3));
+    const float flicker = 1 + 0.04f * std::sin(now * 9.0f) + 0.03f * std::sin(now * 13.7f);
+    const auto glow = [&](float radius, int alpha) {  // a disc fading from its centre to its edge
+        constexpr int kSides = 48;
+        const ImVec2 uv = ImGui::GetDrawListSharedData()->TexUvWhitePixel;
+        const ImDrawIdx centre = static_cast<ImDrawIdx>(back->_VtxCurrentIdx);
+        back->PrimReserve(kSides * 3, kSides + 1);
+        back->PrimWriteVtx(torch_, uv, IM_COL32(255, 176, 70, alpha));
+        for (int i = 0; i < kSides; ++i) {
+            const float angle = 6.2831853f * static_cast<float>(i) / kSides;
+            back->PrimWriteVtx(ImVec2(torch_.x + std::cos(angle) * radius, torch_.y + std::sin(angle) * radius), uv, IM_COL32(255, 176, 70, 0));
+        }
+        for (int i = 0; i < kSides; ++i) {
+            back->PrimWriteIdx(centre);
+            back->PrimWriteIdx(static_cast<ImDrawIdx>(centre + 1 + i));
+            back->PrimWriteIdx(static_cast<ImDrawIdx>(centre + 1 + (i + 1) % kSides));
+        }
+    };
+    glow(px(340) * flicker, 54);
+    glow(px(120) * flicker, 40);
+
+    // Dust in the air.
     if (motes_.size() != 90) {
         motes_.clear();
         for (int i = 0; i < 90; ++i) motes_.push_back(ImVec4(screen.x * random01(), screen.y * random01(), 0.6f + 1.8f * random01(), 6.28f * random01()));
@@ -2207,7 +2760,10 @@ void Launcher::frame(float now, float dt) {
             mote.y = screen.y + px(10);
             mote.x = screen.x * random01();
         }
-        back->AddCircleFilled(ImVec2(mote.x, mote.y), px(mote.z), IM_COL32(255, 214, 140, static_cast<int>(26 + 22 * mote.z)));
+        const float dx = mote.x - torch_.x, dy = mote.y - torch_.y;
+        const float lit = std::max(0.0f, 1 - std::sqrt(dx * dx + dy * dy) / px(320));  // the dust in the torch's light
+        back->AddCircleFilled(ImVec2(mote.x, mote.y), px(mote.z) * (1 + 0.6f * lit),
+                              IM_COL32(255, 214, 140, static_cast<int>(26 + 22 * mote.z + 150 * lit)));
     }
 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -2231,7 +2787,7 @@ void Launcher::frame(float now, float dt) {
 // The game's logo (from the player's copy) or its name, and the port's tag under it.
 void Launcher::header(float since) {
     g_alpha = ease_out(since / 1.0f);
-    const ImVec2 logo_at(px(86), px(46) - px(30) * (1 - g_alpha));
+    const ImVec2 logo_at(px(86), px(46));
     if (logo_) {
         const float h = px(132), w = h * static_cast<float>(logo_width_) / static_cast<float>(std::max(1, logo_height_));
         list_->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(logo_)), logo_at, ImVec2(logo_at.x + w, logo_at.y + h), ImVec2(0, 0), ImVec2(1, 1), fade(IM_COL32_WHITE));
@@ -2257,39 +2813,101 @@ void Launcher::header(float since) {
     }
 }
 
-// The current page in the panel on the right, sliding in.
+// The current page in the panel on the right, fading in.
 void Launcher::panel(float now) {
     const float since = now - start_time_;
     const float enter = ease_out((now - page_since_) / 0.45f);
-    g_alpha = enter * ease_out((since - 0.3f) / 0.6f);
+    page_alpha_ = g_alpha = enter * ease_out((since - 0.3f) / 0.6f);
     panel_width_ = px(600);
-    const float panel_x = static_cast<float>(width_) - px(96) - panel_width_ - px(56) + px(50) * (1 - enter);
-    origin_ = ImVec2(panel_x + px(28), px(64) + px(26));
+    const float column_width = panel_width_ + px(84);
+    const float panel_x = static_cast<float>(width_) - column_width;
+    const float bar_y = static_cast<float>(height_) - px(56), top = px(72);
+    view_top_ = px(3);
+    view_bottom_ = bar_y;
+    // Another page or tab starts at its top.
+    const int tab = page_ == Page::kSettings ? settings_tab_ : page_ == Page::kControls ? controls_tab_ : 0;
+    if (page_ != scroll_page_ || tab != scroll_tab_) {
+        scroll_page_ = page_;
+        scroll_tab_ = tab;
+        scroll_ = scroll_target_ = 0;
+    }
+    origin_ = ImVec2(panel_x + px(40), top - scroll_);
     cursor_ = 0;
+    item_count_ = 0;
+    item_shift_ = 0;
     list_->ChannelsSplit(2);
     row_marked_ = false;
     status_keeps_focus_ = page_ == Page::kPlay;  // a page with a big button: that one is selected first
     list_->ChannelsSetCurrent(1);
+    // Rows scrolled out of the column are neither drawn nor hovered.
+    ImGui::PushClipRect(ImVec2(panel_x, view_top_), ImVec2(panel_x + column_width, view_bottom_), true);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, g_alpha);
     switch (page_) {
-        case Page::kPlay: page_play(); break;
+        case Page::kPlay: in_game_ ? page_paused() : page_play(); break;
         case Page::kSettings: page_settings(); break;
         case Page::kControls: page_controls(); break;
         case Page::kAbout: page_about(); break;
-        case Page::kQuit: break;
+        case Page::kQuit: case Page::kExit: break;
     }
     ImGui::PopStyleVar();
-    list_->ChannelsSetCurrent(0);
-    const ImVec2 pa(panel_x, px(64)), pb(panel_x + panel_width_ + px(56), origin_.y + cursor_ + px(16));
-    const float corner = px(24);
-    const ImVec2 shape[] = {pa, ImVec2(pb.x, pa.y), ImVec2(pb.x, pb.y - corner), ImVec2(pb.x - corner, pb.y), ImVec2(pa.x, pb.y)};
-    list_->AddConvexPolyFilled(shape, 5, fade(IM_COL32(14, 12, 10, 220)));
+    origin_.y -= item_shift_;
+    item_shift_ = 0;
+    g_alpha = page_alpha_;
+
+    // Scrolling: the wheel over the column, and a newly selected row brought into sight.
+    const float overflow = std::max(0.0f, top + cursor_ + px(24) - view_bottom_);
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    if (mouse.x >= panel_x && mouse.y < view_bottom_ && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+        scroll_target_ -= ImGui::GetIO().MouseWheel * px(90);
+    }
+    const ImGuiID nav_id = ImGui::GetCurrentContext()->NavId;
+    if (row_marked_ && nav_id != scrolled_to_) {
+        scrolled_to_ = nav_id;
+        if (row_b_.y > view_bottom_ - px(24)) scroll_target_ = scroll_ + row_b_.y - (view_bottom_ - px(24));
+        if (row_a_.y < top) {
+            scroll_target_ = scroll_ - (top - row_a_.y);
+            if (scroll_target_ < top) scroll_target_ = 0;  // near the top: the whole top, title included
+        }
+    }
+    scroll_target_ = std::clamp(scroll_target_, 0.0f, overflow);
+    scroll_ += (scroll_target_ - scroll_) * std::min(1.0f, ImGui::GetIO().DeltaTime * 14);
+    if (std::fabs(scroll_target_ - scroll_) < 0.5f) scroll_ = scroll_target_;
+    // More above or below: the column's colour over the edge, and a thin bar for where the page is.
+    if (overflow > 0) {
+        const ImU32 shade = fade(IM_COL32(14, 12, 10, 240)), clear = fade(IM_COL32(14, 12, 10, 0));
+        const float edge = px(48), right = panel_x + column_width;
+        if (scroll_ > 1) list_->AddRectFilledMultiColor(ImVec2(panel_x, view_top_), ImVec2(right, view_top_ + edge), shade, shade, clear, clear);
+        if (scroll_ < overflow - 1) list_->AddRectFilledMultiColor(ImVec2(panel_x, view_bottom_ - edge), ImVec2(right, view_bottom_), clear, clear, shade, shade);
+        const float track_a = top, track_b = view_bottom_ - px(16), track = track_b - track_a;
+        const float thumb = track * (view_bottom_ - top) / (view_bottom_ - top + overflow);
+        const float thumb_y = track_a + (track - thumb) * (scroll_ / overflow);
+        list_->AddRectFilled(ImVec2(right - px(14), track_a), ImVec2(right - px(11), track_b), fade(IM_COL32(255, 255, 255, 20)));
+        list_->AddRectFilled(ImVec2(right - px(14), thumb_y), ImVec2(right - px(11), thumb_y + thumb), fade(kGold));
+    }
+    ImGui::PopClipRect();
+
+    list_->ChannelsSetCurrent(0);  // under the page's widgets
+    const ImVec2 pa(panel_x, 0), pb(panel_x + column_width, bar_y);
+    list_->AddRectFilled(pa, pb, fade(IM_COL32(14, 12, 10, 220)));
+    list_->AddLine(pa, ImVec2(pa.x, pb.y), fade(IM_COL32(255, 255, 255, 20)), px(1));
     list_->AddRectFilled(pa, ImVec2(pb.x, pa.y + px(3)), fade(kGold));
     if (row_marked_) {
+        list_->PushClipRect(ImVec2(panel_x, view_top_), ImVec2(pb.x, view_bottom_), true);
         list_->AddRectFilled(row_a_, row_b_, fade(IM_COL32(255, 255, 255, 28)));
         skewed_rect(list_, row_a_, ImVec2(row_a_.x + px(7), row_b_.y), fade(IM_COL32_WHITE), fade(IM_COL32_WHITE));
+        list_->PopClipRect();
     }
     list_->ChannelsMerge();
+}
+
+// One more title, row or button of the page: it fades in, 50 ms after the one above.
+void Launcher::enter_item() {
+    const float delay = 0.05f * static_cast<float>(std::min(item_count_++, 10));
+    const float t = ease_out((static_cast<float>(ImGui::GetTime()) - page_since_ - 0.1f - delay) / 0.35f);
+    origin_.y -= item_shift_;
+    item_shift_ = 0;
+    origin_.y += item_shift_;
+    g_alpha = page_alpha_ * t;
 }
 
 // Keys acting on the whole launcher, after the frame's widgets.
@@ -2301,6 +2919,10 @@ void Launcher::after_frame(float now) {
         done_ = true;
     }
     if (prepare_auto_ && !setup_thread_.joinable()) done_ = true;   // the script's Prepare has ended (setup_rows joined it)
+    // ABYSS_LAUNCHER_PLAY (recomplauncher.json): Play as soon as the game is ready, and quit with it; until then (the
+    // first Prepare) the launcher as usual.
+    static const bool play_when_ready = std::getenv("ABYSS_LAUNCHER_PLAY") != nullptr;
+    if (play_when_ready && ready && !setup_thread_.joinable()) play_ = done_ = true;
     if (ready && rebinding_ < 0 && ImGui::IsKeyPressed(ImGuiKey_GamepadStart)) play_ = true;  // Start plays from any page
     if (rebinding_ < 0 && cancel_frame_ != ImGui::GetFrameCount() && (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight))) {
         if (!menu_has_focus_) {
@@ -2338,7 +2960,7 @@ void Launcher::leave_page_on_left() {
 // right enters the page, Enter or the confirm button acts or enters.
 void Launcher::side_menu(float now, float since, const char* const* labels, const Page* targets, int count) {
     const bool ready = game_ready_ && program_ready_;
-    const auto action_only = [&](int i) { return targets[i] == Page::kQuit; };
+    const auto action_only = [&](int i) { return targets[i] == Page::kQuit || targets[i] == Page::kExit; };
     const auto select = [&](int i) {
         menu_cursor_ = i;
         if (!action_only(i) && page_ != targets[i]) {
@@ -2348,7 +2970,13 @@ void Launcher::side_menu(float now, float since, const char* const* labels, cons
         }
     };
     const auto act = [&](int i) {
-        if (targets[i] == Page::kQuit) {
+        if (in_game_ && targets[i] == Page::kExit) {
+            exit_ = true;
+        } else if (in_game_ && targets[i] == Page::kQuit) {
+            leave_ = true;
+        } else if (in_game_ && targets[i] == Page::kPlay) {
+            resume_ = true;
+        } else if (targets[i] == Page::kQuit) {
             done_ = true;
         } else if (targets[i] == Page::kPlay && ready) {
             play_ = true;
@@ -2425,6 +3053,15 @@ void Launcher::side_menu(float now, float since, const char* const* labels, cons
             skewed_rect(list_, ImVec2(a.x - px(14) + shift, a.y), ImVec2(a.x - px(6) + shift, b.y), fade(IM_COL32_WHITE, on * (0.25f + 0.75f * lit)),
                         fade(IM_COL32_WHITE, on * (0.25f + 0.75f * lit)));
             if (lit > 0.01f) list_->AddRectFilled(ImVec2(a.x + shift, b.y + px(3)), ImVec2(b.x, b.y + px(6)), fade(IM_COL32_WHITE, lit));
+            // The bar trails off to the right, and a glint runs along it every 2.4 s.
+            skewed_rect(list_, ImVec2(b.x, a.y), ImVec2(b.x + px(150) * on, b.y), fade(kGoldDark, 0.6f * on), fade(kGoldDark, 0));
+            const float run = ease_out(std::fmod(now / 2.4f, 1.0f) / 0.6f), glint = px(70);
+            const float x = a.x + shift - glint + (b.x + px(150) - a.x - shift + glint) * run;
+            const ImU32 clear = fade(IM_COL32_WHITE, 0), light = fade(IM_COL32_WHITE, 0.4f * on * (1 - run));
+            list_->PushClipRect(ImVec2(a.x + shift, a.y), ImVec2(b.x + px(150) * on, b.y), true);
+            list_->AddRectFilledMultiColor(ImVec2(x - glint, a.y), ImVec2(x, b.y), clear, light, light, clear);
+            list_->AddRectFilledMultiColor(ImVec2(x, a.y), ImVec2(x + glint, b.y), light, clear, clear, light);
+            list_->PopClipRect();
         }
         const float lit_text = anim(ImGui::GetID(labels[i]) + 2, current && menu_has_focus_);
         text(black_, px(36), ImVec2(a.x + px(22) + shift, a.y + px(7)),
@@ -2451,15 +3088,93 @@ void Launcher::bottom_bar(float since) {
     field(t.bar_game, game_ready_ ? t.bar_game_ok : t.bar_game_none);
     field(t.bar_pad, pad_connected_ ? t.bar_pad_on : t.bar_pad_off);
     field(t.bar_version, ABYSS_VERSION);
+    // Over the bar, bottom left, apart from its fields: rounded buttons to the report and the support.
+    struct BarButton {
+        ImVec2 at;
+        bool hover, clicked;
+    };
+    float button_x = px(86);
+    const float button_y = bar_y - px(52);
+    // Pills with a soft shadow that rise a little under the mouse: glass (`fill` 0) or solid in `fill`.
+    const auto button = [&](float width, ImU32 fill) {
+        BarButton b{ImVec2(button_x, button_y), false, false};
+        b.hover = ImGui::IsMouseHoveringRect(b.at, ImVec2(button_x + width, button_y + px(36)));
+        if (b.hover) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            b.at.y -= px(2);
+        }
+        const ImVec2 end(b.at.x + width, b.at.y + px(36));
+        list_->AddRectFilled(ImVec2(b.at.x, b.at.y + px(4)), ImVec2(end.x, end.y + px(4)), fade(IM_COL32(0, 0, 0, b.hover ? 120 : 80)), px(18));
+        if (fill) {
+            list_->AddRectFilled(b.at, end, fade(b.hover ? mix(fill, IM_COL32(255, 255, 255, 255), 0.15f) : fill), px(18));
+            list_->AddRectFilled(ImVec2(b.at.x + px(10), b.at.y + px(1)), ImVec2(end.x - px(10), b.at.y + px(2)), fade(IM_COL32(255, 255, 255, 70)));
+        } else {
+            list_->AddRectFilled(b.at, end, fade(IM_COL32(18, 18, 22, 190)), px(18));
+            list_->AddRectFilled(b.at, end, fade(IM_COL32(255, 255, 255, b.hover ? 40 : 20)), px(18));
+            list_->AddRect(b.at, end, fade(IM_COL32(255, 255, 255, b.hover ? 70 : 36)), px(18), 0, px(1));
+        }
+        b.clicked = b.hover && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        button_x = end.x + px(10);
+        return b;
+    };
+    enum { kFlag, kMug };
+    const auto link = [&](const char* label, ImU32 colour, int icon, ImU32 fill = 0) {
+        const ImVec2 size = measure(body_bold_, px(16), label);
+        const float icon_width = px(26);
+        const BarButton b = button(size.x + px(36) + icon_width, fill);
+        const ImU32 ink = fade(colour);
+        const float s = px(16), ix = b.at.x + px(16), cy = b.at.y + px(18);
+        if (icon == kFlag) {  // a flag on its pole
+            list_->AddLine(ImVec2(ix + s * 0.12f, cy - s * 0.55f), ImVec2(ix + s * 0.12f, cy + s * 0.55f), ink, px(1.8f));
+            const ImVec2 flag[] = {ImVec2(ix + s * 0.12f, cy - s * 0.55f), ImVec2(ix + s * 0.95f, cy - s * 0.45f),
+                                   ImVec2(ix + s * 0.95f, cy + s * 0.05f), ImVec2(ix + s * 0.12f, cy - s * 0.05f)};
+            list_->AddConvexPolyFilled(flag, 4, ink);
+        } else {  // Ko-fi's cup with its heart
+            list_->AddRect(ImVec2(ix, cy - s * 0.42f), ImVec2(ix + s * 0.78f, cy + s * 0.45f), ink, s * 0.14f, 0, px(1.7f));
+            list_->PathArcTo(ImVec2(ix + s * 0.8f, cy - s * 0.02f), s * 0.24f, -1.5708f, 1.5708f);
+            list_->PathStroke(ink, 0, px(1.7f));
+            const float hx = ix + s * 0.39f, hy = cy - s * 0.02f, r = s * 0.1f;
+            list_->AddCircleFilled(ImVec2(hx - r * 0.95f, hy - r * 0.35f), r, ink);
+            list_->AddCircleFilled(ImVec2(hx + r * 0.95f, hy - r * 0.35f), r, ink);
+            list_->AddTriangleFilled(ImVec2(hx - r * 1.9f, hy - r * 0.05f), ImVec2(hx + r * 1.9f, hy - r * 0.05f),
+                                     ImVec2(hx, hy + r * 1.9f), ink);
+        }
+        text(body_bold_, px(16), ImVec2(b.at.x + px(18) + icon_width, b.at.y + (px(36) - size.y) / 2), ink, label);
+        return b.clicked;
+    };
+    if (link(t.report, kInk, kFlag)) {
+        ShellExecuteA(nullptr, "open", "https://github.com/SickSartori/abyssport/issues/new", nullptr, nullptr, SW_SHOWNORMAL);
+    }
+    if (link(t.support, IM_COL32(255, 255, 255, 255), kMug, IM_COL32(255, 94, 91, 255))) {  // Ko-fi's colour
+        ShellExecuteA(nullptr, "open", "https://ko-fi.com/sicksartori", nullptr, nullptr, SW_SHOWNORMAL);
+    }
     float right = screen.x - px(86);
     const auto hint = [&](const char* key, ImU32 colour, const char* label) {
         right -= measure(body_, px(18), label).x;
         text(body_, px(18), ImVec2(right, text_y), kDim, label);
-        const float key_width = std::max(px(24), measure(body_bold_, px(15), key).x + px(12));
-        right -= key_width + px(8);
-        list_->AddRectFilled(ImVec2(right, text_y), ImVec2(right + key_width, text_y + px(22)), fade(colour), px(11));
-        const ImVec2 key_size = measure(body_bold_, px(15), key);
-        text(body_bold_, px(15), ImVec2(right + (key_width - key_size.x) / 2, text_y + (px(22) - key_size.y) / 2), IM_COL32(6, 6, 7, 255), key);
+        // keycaps, one per key: "Q E" is two, the four arrows four
+        const std::string keys = key;
+        const bool arrows = keys.rfind("\xE2\x86", 0) == 0;
+        std::vector<std::string> caps;
+        for (size_t i = 0; i < keys.size();) {
+            const size_t end = arrows ? i + 3 : std::min(keys.find(' ', i), keys.size());
+            caps.push_back(keys.substr(i, end - i));
+            i = arrows ? end : end + 1;
+        }
+        const float cap_h = px(24), gap = px(4), depth = px(3);
+        float total = -gap;
+        for (const std::string& cap : caps) total += std::max(cap_h, measure(body_bold_, px(14), cap.c_str()).x + px(12)) + gap;
+        right -= total + px(8);
+        float cap_x = right;
+        const float top = text_y - px(2);
+        for (const std::string& cap : caps) {
+            const float w = std::max(cap_h, measure(body_bold_, px(14), cap.c_str()).x + px(12));
+            list_->AddRectFilled(ImVec2(cap_x, top + depth), ImVec2(cap_x + w, top + cap_h), fade(mix(colour, IM_COL32(0, 0, 0, 255), 0.5f)), px(5));
+            list_->AddRectFilled(ImVec2(cap_x, top), ImVec2(cap_x + w, top + cap_h - depth), fade(colour), px(5));
+            const ImVec2 size = measure(body_bold_, px(14), cap.c_str());
+            text(body_bold_, px(14), ImVec2(cap_x + (w - size.x) / 2, top + (cap_h - depth - size.y) / 2), IM_COL32(6, 6, 7, 255), cap.c_str());
+            cap_x += w + gap;
+        }
         right -= px(24);
     };
     hint("Q E", kChrome, page_ == Page::kSettings || page_ == Page::kControls ? t.tabs_hint : t.pages_hint);
@@ -2468,6 +3183,127 @@ void Launcher::bottom_bar(float since) {
     hint("\xE2\x86\x91\xE2\x86\x93\xE2\x86\x90\xE2\x86\x92", kChrome, t.move_hint);
 }
 
+// The key for the action being changed (Controls): the next one pressed; Escape keeps the one it had.
+bool Launcher::rebind_event(const SDL_Event& event) {
+    if (rebinding_ < 0 || event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return false;
+    if (event.key.key != SDLK_ESCAPE) {
+        const char* name = SDL_GetKeyName(event.key.key);
+        for (const Bind& bind : kBinds) {  // a key another action had is taken from it
+            if (setting(bind.key, bind.def) == name) settings_set_str(bind.key, "");
+        }
+        settings_set_str(kBinds[rebinding_].key, name);
+        settings_save();
+    }
+    rebinding_ = -1;
+    cancel_frame_ = ImGui::GetFrameCount() + 1;
+    return true;
+}
+
+// --- the game's menu (F1): the launcher's pages over the paused game ---
+
+void Launcher::init_in_game(SDL_GPUDevice* device, void (*apply)(const char* key)) {
+    device_ = device;
+    apply_ = apply;
+    // The launcher's folder (its letters and pictures): it says where when it starts the game; else beside the game's
+    // program (the build tree).
+    if (const wchar_t* dir = _wgetenv(L"ABYSS_LAUNCHER_DIR")) {
+        exe_directory_ = dir;
+    } else {
+        const char* base = SDL_GetBasePath();
+        exe_directory_ = base ? fs::path(base) : fs::current_path();
+    }
+    game_directory_ = fs::current_path();  // the game runs in its own folder
+    game_ready_ = program_ready_ = true;
+    load_fonts();
+    load_art();
+}
+
+void Launcher::open_in_game() {
+    page_ = Page::kPlay;
+    menu_cursor_ = 0;
+    menu_has_focus_ = true;
+    focus_panel_ = false;
+    rebinding_ = -1;
+    resume_ = leave_ = exit_ = false;
+    start_armed_ = false;
+    start_time_ = page_since_ = opened_at_ = static_cast<float>(ImGui::GetTime());
+    // For scripts (the overlay's headless dump), as the launcher's shots: ABYSS_LAUNCHER_PAGE=1..2, ABYSS_LAUNCHER_TAB=n.
+    if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) menu_cursor_ = static_cast<int>(page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 2)));
+    if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);
+}
+
+// In place of Play: the game paused, how it is set up, Resume at the foot.
+void Launcher::page_paused() {
+    const Texts& t = T();
+    title(t.paused_title);
+    lead(t.paused_lead);
+    status(pad_connected_, pad_connected_ ? t.pad_on : t.pad_off, pad_connected_ ? t.pad_on_detail : t.pad_off_detail, nullptr, "##pad");
+    const int current = style();
+    const std::string heading = std::string(t.style) + ": " + t.style_names[current];
+    if (status(true, heading.c_str(), t.style_details[current], t.change, "##style")) {
+        page_ = Page::kSettings;
+        menu_cursor_ = 1;
+        page_since_ = static_cast<float>(ImGui::GetTime());
+    }
+    cursor_ = std::max(cursor_, view_bottom_ - origin_.y - px(130));  // Resume at the foot of the column
+    if (big_button(t.resume, "##resume", false)) resume_ = true;
+}
+
+// mc3port's frame_in_game: the menu, the page and the bar over the game, darker under the menu.
+void Launcher::frame_in_game(int width, int height) {
+    const Texts& t = T();
+    width_ = width;
+    height_ = height;
+    scale_ = std::min(static_cast<float>(width_) / 1270.0f, static_cast<float>(height_) / 900.0f);
+    int count = 0;
+    if (SDL_JoystickID* pads = SDL_GetGamepads(&count)) SDL_free(pads);
+    pad_connected_ = count > 0;
+    configure_navigation();
+    const float now = static_cast<float>(ImGui::GetTime()), since = now - start_time_;
+    const ImVec2 screen(static_cast<float>(width_), static_cast<float>(height_));
+    const float dim = ease_out(since / 0.3f);
+    ImDrawList* back = ImGui::GetBackgroundDrawList();
+    back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(0, 0, 0, static_cast<int>(120 * dim)));
+    const ImU32 shade = IM_COL32(6, 4, 2, static_cast<int>(210 * dim)), clear = IM_COL32(6, 4, 2, 0);
+    back->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(screen.x * 0.55f, screen.y), shade, clear, clear, shade);
+
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(screen);
+    ImGui::Begin("##game_menu", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+    list_ = ImGui::GetWindowDrawList();
+    header(since * 2);  // the launcher's entrance, twice as quick
+    // started by the launcher: back to it, or quit the game and the launcher both; started alone: quit
+    const bool launched = std::getenv("ABYSS_LAUNCHER") != nullptr;
+    const char* labels[] = {t.resume, t.settings, t.controls, launched ? t.back_launcher : t.quit_game, t.quit_game};
+    const Page targets[] = {Page::kPlay, Page::kSettings, Page::kControls, Page::kQuit, Page::kExit};
+    side_menu(now, since * 2, labels, targets, launched ? 5 : 4);
+    panel(now);
+    bottom_bar(since * 2);
+    g_alpha = 1;
+    ImGui::End();
+
+    // Back: from the page to the menu, then to Resume's page, then to the game. Start resumes from anywhere.
+    if (rebinding_ < 0 && cancel_frame_ != ImGui::GetFrameCount()) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight)) {
+            if (!menu_has_focus_) {
+                back_to_menu();
+            } else if (page_ != Page::kPlay) {
+                page_ = Page::kPlay;
+                menu_cursor_ = 0;
+                page_since_ = now;
+            } else {
+                resume_ = true;
+            }
+        }
+        if (!ImGui::IsKeyDown(ImGuiKey_GamepadStart) && ImGui::GetTime() - opened_at_ > 0.25) start_armed_ = true;
+        else if (start_armed_ && ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false)) resume_ = true;
+    }
+    leave_page_on_left();
+}
+
+#ifndef ABYSS_LAUNCHER_IN_GAME
 // The window's picture into a PNG (ABYSS_LAUNCHER_SHOT): read back from the texture the frame was drawn into.
 bool Launcher::save_shot(SDL_GPUTexture* texture, SDL_GPUTextureFormat format, const char* path) {
     const Uint32 size = static_cast<Uint32>(width_ * height_ * 4);
@@ -2505,6 +3341,12 @@ int Launcher::run() {
         stop();
         return 1;
     }
+#ifndef ABYSS_LAUNCHER_IN_GAME
+    if (settings_int("check_updates", 1) && !std::getenv("RECOMPLAUNCHER") && !std::getenv("ABYSS_LAUNCHER_PLAY")) {   // (off, or RecompLauncher's own updates: nothing is asked)
+        updates_.state = 0;
+        update_thread_ = std::thread(check_for_updates, &updates_);
+    }
+#endif
     const char* shot = std::getenv("ABYSS_LAUNCHER_SHOT");
     if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 3));
     if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);
@@ -2526,19 +3368,7 @@ int Launcher::run() {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) done_ = true;
-            if (rebinding_ >= 0 && event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {  // the key for the action being changed
-                if (event.key.key != SDLK_ESCAPE) {
-                    const char* name = SDL_GetKeyName(event.key.key);
-                    for (const Bind& bind : kBinds) {  // a key another action had is taken from it
-                        if (setting(bind.key, bind.def) == name) settings_set_str(bind.key, "");
-                    }
-                    settings_set_str(kBinds[rebinding_].key, name);
-                    settings_save();
-                }
-                rebinding_ = -1;
-                cancel_frame_ = ImGui::GetFrameCount() + 1;
-                continue;
-            }
+            if (rebind_event(event)) continue;
             if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F11) {
                 SDL_SetWindowFullscreen(window_, !(SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN));
             }
@@ -2553,7 +3383,9 @@ int Launcher::run() {
             SDL_Delay(30);
             continue;
         }
-        scale_ = std::min(static_cast<float>(width_) / 1600.0f, static_cast<float>(height_) / 900.0f);
+        // Designed on 1600x900: by the height, unless the logo, the menu and the page's column (1270 design px side by
+        // side) need a smaller size to fit the width.
+        scale_ = std::min(static_cast<float>(width_) / 1270.0f, static_cast<float>(height_) / 900.0f);
 
         configure_navigation();
         ImGui_ImplSDLGPU3_NewFrame();
@@ -2611,9 +3443,41 @@ int Launcher::run() {
     return prepare_auto_ && !(game_ready_ && program_ready_) ? 1 : 0;
 }
 
+#endif  // ABYSS_LAUNCHER_IN_GAME
+
 }  // namespace
 
+#ifndef ABYSS_LAUNCHER_IN_GAME
 int main(int, char**) {
     Launcher launcher;
     return launcher.run();
 }
+#else
+// The game's menu (launcher_game.h).
+namespace {
+Launcher* g_menu = nullptr;
+}
+
+void launcher_game_init(SDL_GPUDevice* device, void (*apply)(const char* key)) {
+    if (g_menu) return;
+    g_menu = new Launcher(true);  // (kept for the whole run, as the overlay's ImGui context is)
+    g_menu->init_in_game(device, apply);
+}
+void launcher_game_open() {
+    if (g_menu) g_menu->open_in_game();
+}
+int launcher_game_frame(int width, int height) {
+    if (!g_menu) return 1;
+    g_menu->frame_in_game(width, height);
+    return g_menu->take_exit() ? 3 : g_menu->take_leave() ? 2 : g_menu->take_resume() ? 1 : 0;
+}
+bool launcher_game_event(const SDL_Event* event) {
+    return g_menu && g_menu->rebind_event(*event);
+}
+extern "C" const char* game_text(int id) {
+    if (id < 0 || id >= GT_COUNT) return "";
+    const std::string language = launcher_language();   // (each time: the menu's Settings can change it mid-run)
+    const char* const* table = language == "it" ? kGameTextsItalian : language == "pt" ? kGameTextsPortuguese : language == "es" ? kGameTextsSpanish : kGameTextsEnglish;
+    return table[id];
+}
+#endif
