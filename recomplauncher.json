@@ -2,6 +2,26 @@
   "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
   "format": 1,
   "name": "abyssport",
+  "repo": "SickSartori/abyssport",
+  "game": {
+    "kind": "folder",
+    "label": "Your copy of Uncharted: Golden Abyss, version 1.00: the PCSA00029 (USA) or PCSF00012 (Europe) folder copied off your PS Vita, with sce_sys/package/work.bin",
+    "check": { "file": "sce_sys/package/work.bin" },
+    "update": {
+      "into": "firmware",
+      "label": "The PS Vita system update 3.74 (PSVUPDAT.PUP, from Sony's PS Vita system software page)",
+      "accepts": "file"
+    }
+  },
+  "prepare": {
+    "program": ["python/python.exe"],
+    "args": ["-u", "{install}/tools/prepare.py", "--install={install}", "--game={game}", "--firmware={install}/firmware"],
+    "label": "Making the game from your copy: decrypted, recompiled and compiled on this PC (about 15 minutes, once)",
+    "timeout": 3600,
+    "keeps_copy": true,
+    "done": ["{install}/game/abyss.exe", "{install}/game/library/decrypted/PCSA00029/recomp/game.img"],
+    "version": "0.1.0"
+  },
   "start": {
     "program": ["abyssport.exe"],
     "env": { "ABYSS_LAUNCHER_PLAY": "1" }

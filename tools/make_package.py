@@ -10,7 +10,7 @@ packages tools/make_game.py needs. No game code or data goes in: the player's la
   abyssport.exe, fonts/, art/, shaders.txt   the launcher and what it reads
   runtime/lib, runtime/include           the runtime compiled, and the two headers the game's code includes
   runtime/bin                            FFmpeg's DLLs, copied beside the abyss.exe the player's PC links
-  tools/                                 make_game.py, build_game.py and what they run
+  tools/                                 make_game.py, build_game.py, prepare.py (RecompLauncher's setup) and what they run
   python/                                Python, embedded, with capstone and pycryptodome
   toolchain/llvm-mingw                   the compiler, its x86-64 part only
   licenses/, docs/                       the licences of what is shipped; the controls guide
@@ -91,7 +91,12 @@ def main():
     copytree(os.path.join(ROOT, "third_party", "fonts"), os.path.join(out, "fonts"))
     copytree(os.path.join(ROOT, "res", "launcher"), os.path.join(out, "art"))
     shutil.copyfile(os.path.join(ROOT, "res", "shaders.txt"), os.path.join(out, "shaders.txt"))
-    shutil.copyfile(os.path.join(ROOT, "recomplauncher.json"), os.path.join(out, "recomplauncher.json"))   # RecompLauncher reads it beside the exe
+    # RecompLauncher reads it beside the exe; its setup step (prepare) builds the game with this release's runtime, so its
+    # version is the release's: players who set up with an older one compile again
+    with open(os.path.join(ROOT, "recomplauncher.json"), encoding="utf-8") as f: manifest = f.read()
+    manifest, n = re.subn(r'("version":\s*")[^"]*(",?\s*\n\s*\},?\s*\n\s*"start")', lambda m: m.group(1) + version + m.group(2), manifest, count=1)
+    if n != 1: die("recomplauncher.json: no prepare.version just before start")
+    with open(os.path.join(out, "recomplauncher.json"), "w", encoding="utf-8") as f: f.write(manifest)
 
     print("the runtime", flush=True)
     for d in ("lib", "include", "bin"): os.makedirs(os.path.join(out, "runtime", d))
@@ -103,7 +108,7 @@ def main():
 
     print("the tools", flush=True)
     os.makedirs(os.path.join(out, "tools"))
-    for f in ("make_game.py", "build_game.py", "PCSA00029.toml"): shutil.copyfile(os.path.join(ROOT, "tools", f), os.path.join(out, "tools", f))
+    for f in ("make_game.py", "build_game.py", "prepare.py", "PCSA00029.toml"): shutil.copyfile(os.path.join(ROOT, "tools", f), os.path.join(out, "tools", f))
     for d in ("decrypt", "recompiler"): copytree(os.path.join(ROOT, "tools", d), os.path.join(out, "tools", d))
 
     print("Python", flush=True)
