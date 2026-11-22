@@ -50,7 +50,8 @@ Spanish; the European one English (UK), French, German, Italian and Dutch. Autom
 | ![The title screen](docs/screenshots/title.jpg) | ![The launcher](docs/screenshots/launcher.jpg) |
 | ![Launcher settings: the style, then the Picture tab](docs/screenshots/launcher-settings.jpg) | ![How to play: drawing on the touch screen with the mouse](docs/screenshots/launcher-how.jpg) |
 
-The two pictures of the game are frames at the Vita's own 960x544; the port can draw it at up to six times that.
+The prologue and the title screen are frames at the Vita's own 960x544; the two pictures above them are drawn at a
+higher internal resolution (the port goes up to six times the Vita's).
 
 ## Features
 
