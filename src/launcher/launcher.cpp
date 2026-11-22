@@ -108,6 +108,9 @@ struct Texts {
     // the game's menu (F1): the launcher's pages over the paused game
     const char *resume, *paused_title, *paused_lead, *back_launcher, *quit_game;
     const char *osd, *osd_detail, *osd_names[3], *layout, *layout_detail, *layout_names[3];
+    // the first run: where the firmware file comes from (Sony's page for the Vita's system software)
+    const char *pup_where, *pup_get;
+    const char *change_copy;   // Play: another copy of the game (US or European), made again
 };
 
 const Texts kItalian = {
@@ -194,6 +197,8 @@ const Texts kItalian = {
     "Prestazioni a schermo", "Fotogrammi al secondo e tempi sopra il gioco (anche F10)", {"No", "Essenziali", "Complete"},
     "Schema dei comandi", "Come si fanno le azioni del touch: come sulla console portatile, o lo schema della PS TV, solo tasti. Dal prossimo avvio",
     {"Chiedi", "Standard", "PS TV"},
+    "Il file si scarica dal sito di Sony: l'aggiornamento del sistema PS Vita 3.74.", "Scarica da Sony",
+    "Cambia copia",
 };
 
 const Texts kEnglish = {
@@ -280,6 +285,8 @@ const Texts kEnglish = {
     "Performance display", "Frames per second and frame times over the game (F10 too)", {"Off", "Basic", "Full"},
     "Controller layout", "How the touch screen's actions are done: as on the handheld, or the PS TV's own layout, buttons only. Next start",
     {"Ask", "Standard", "PS TV"},
+    "The file comes from Sony's website: the PS Vita system update 3.74.", "Get it from Sony",
+    "Change copy",
 };
 
 std::string setting(const char* key, const char* def) {
@@ -371,6 +378,8 @@ const Texts kPortuguese = {
     "Desempenho na tela", "Quadros por segundo e tempos sobre o jogo (também F10)", {"Não", "Básico", "Completo"},
     "Layout dos comandos", "Como as ações de toque são feitas: como no portátil, ou o layout do PS TV, só botões. No próximo início",
     {"Perguntar", "Padrão", "PS TV"},
+    "O arquivo é baixado do site da Sony: a atualização do sistema PS Vita 3.74.", "Baixar da Sony",
+    "Trocar cópia",
 };
 
 const Texts kSpanish = {
@@ -457,6 +466,8 @@ const Texts kSpanish = {
     "Rendimiento en pantalla", "Fotogramas por segundo y tiempos sobre el juego (también F10)", {"No", "Básico", "Completo"},
     "Esquema de los controles", "Cómo se hacen las acciones táctiles: como en la portátil, o el esquema de PS TV, solo botones. Al próximo inicio",
     {"Preguntar", "Estándar", "PS TV"},
+    "El archivo se descarga de la web de Sony: la actualización del sistema PS Vita 3.74.", "Descargar de Sony",
+    "Cambiar copia",
 };
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
@@ -710,11 +721,6 @@ constexpr StyleValue kStyleValues[] = {
 };
 enum { kStyleOriginal, kStyleEnhanced, kStyleCustom };
 
-struct Trail {
-    float x, y, speed, length;
-    ImU32 colour;
-};
-
 class Launcher {
 public:
     int run();
@@ -859,6 +865,8 @@ private:
     bool prepare_auto_ = false;              // ABYSS_LAUNCHER_PREPARE: started by a script, which waits for the end
     std::string game_version_;
     std::vector<std::string> game_languages_;   // the copy's (game_language)
+    bool change_copy_ = false;                  // Play's Change copy: the first run's rows again, over the game already made
+    std::string title_id_ = "PCSA00029";        // the copy's own: the US release, or PCSF00012, the European (its param.sfo)
 
     bool menu_has_focus_ = true, focus_panel_ = false, left_pending_ = false;
     int menu_cursor_ = 0;
@@ -894,7 +902,6 @@ private:
     ImVec2 torch_{-1, -1}, last_mouse_{-1, -1};
     float mouse_moved_at_ = -100;
     std::unordered_map<ImGuiID, float> anims_;
-    std::vector<Trail> trails_;
     std::vector<ImVec4> motes_;
 };
 
@@ -957,7 +964,7 @@ bool Launcher::start() {
     info.ColorTargetFormat = format_;
     if (!ImGui_ImplSDLGPU3_Init(&info)) return false;
     load_fonts();
-    std::srand(static_cast<unsigned>(SDL_GetPerformanceCounter()));   // (which of our backgrounds, the dust and the trails)
+    std::srand(static_cast<unsigned>(SDL_GetPerformanceCounter()));   // (which of our backgrounds, and the dust)
     load_art();
     // The first time: Enhanced, as the other ports start (the game alone starts on its own defaults), unless a style
     // key was already set from outside (RecompLauncher's settings).
@@ -1041,8 +1048,8 @@ SDL_GPUTexture* Launcher::make_texture(const unsigned char* rgba, int width, int
     return texture;
 }
 
-// The background and the logo, from the player's own copy: sce_sys/pic0.png (the game's picture, blurred here: made
-// small and averaged, the GPU's filter does the rest) and sce_sys/livearea/contents/startup.png (its logo). Until
+// The background and the logo, from the player's own copy: sce_sys/pic0.png (the game's picture, shown sharp) and
+// sce_sys/livearea/contents/startup.png (its logo). Until
 // there is a copy, one of abyssport's own pictures (art/bg_*.jpg), chosen at random. The
 // emblem beside the port's name is always ours.
 // A picture as RGBA, the file read whole first: the runtime's stb decodes from memory only (in the game's menu).
@@ -1087,43 +1094,7 @@ void Launcher::load_art() {
     if (picture) {
         if (background_) SDL_ReleaseGPUTexture(device_, background_);
         background_is_game_ = true;
-        const int sw = 96, sh = std::max(1, 96 * h / std::max(1, w));
-        std::vector<float> small(static_cast<size_t>(sw * sh * 3), 0.0f), pass(small.size());
-        for (int y = 0; y < sh; ++y) {
-            for (int x = 0; x < sw; ++x) {  // the box of source pixels this one covers
-                const int x0 = x * w / sw, x1 = std::max(x0 + 1, (x + 1) * w / sw), y0 = y * h / sh, y1 = std::max(y0 + 1, (y + 1) * h / sh);
-                float sum[3] = {};
-                for (int v = y0; v < y1; ++v) {
-                    for (int u = x0; u < x1; ++u) {
-                        for (int c = 0; c < 3; ++c) sum[c] += picture[(v * w + u) * 4 + c];
-                    }
-                }
-                for (int c = 0; c < 3; ++c) small[(y * sw + x) * 3 + c] = sum[c] / static_cast<float>((x1 - x0) * (y1 - y0));
-            }
-        }
-        for (int round = 0; round < 3; ++round) {  // three box blurs: close to a gaussian
-            for (int axis = 0; axis < 2; ++axis) {
-                for (int y = 0; y < sh; ++y) {
-                    for (int x = 0; x < sw; ++x) {
-                        for (int c = 0; c < 3; ++c) {
-                            float sum = 0;
-                            for (int d = -2; d <= 2; ++d) {
-                                const int u = std::clamp(axis ? x : x + d, 0, sw - 1), v = std::clamp(axis ? y + d : y, 0, sh - 1);
-                                sum += small[(v * sw + u) * 3 + c];
-                            }
-                            pass[(y * sw + x) * 3 + c] = sum / 5;
-                        }
-                    }
-                }
-                small.swap(pass);
-            }
-        }
-        std::vector<unsigned char> rgba(static_cast<size_t>(sw * sh * 4));
-        for (int i = 0; i < sw * sh; ++i) {
-            for (int c = 0; c < 3; ++c) rgba[i * 4 + c] = static_cast<unsigned char>(std::clamp(small[i * 3 + c], 0.0f, 255.0f));
-            rgba[i * 4 + 3] = 255;
-        }
-        background_ = make_texture(rgba.data(), sw, sh);
+        background_ = make_texture(picture, w, h);   // as it is, sharp: the screen's darkening keeps the texts readable
         background_width_ = w;
         background_height_ = h;
         stbi_image_free(picture);
@@ -1164,6 +1135,11 @@ void Launcher::find_game() {
         // the languages of the copy's text: the names in its gamedata.bin's index (an HG2 archive, the index's size
         // at +12), game/strings/onscreen.<language>.strings.bsp -- the US copy: en fr es; the European one: en-gb fr de it nl
         game_languages_.clear();
+        {   // which release the copy is (its library is under PCSA00029 either way: the same code): its param.sfo's TITLE_ID
+            std::ifstream sfo(game_directory_ / "fs" / "app0" / "sce_sys" / "param.sfo", std::ios::binary);
+            const std::string bytes((std::istreambuf_iterator<char>(sfo)), std::istreambuf_iterator<char>());
+            title_id_ = bytes.find("PCSF00012") != std::string::npos ? "PCSF00012" : "PCSA00029";
+        }
         if (FILE* file = _wfopen((game_directory_ / "fs" / "app0" / "gamedata.bin").c_str(), L"rb")) {
             unsigned char head[16] = {};
             if (std::fread(head, 1, 16, file) == 16 && !std::memcmp(head, "HG2", 4)) {
@@ -1270,10 +1246,12 @@ bool Launcher::run_tool(const std::wstring& command, bool making) {
 void Launcher::start_setup() {
     const Texts& t = T();
     const fs::path base = setup_base();
-    const fs::path library = base / "library";
-    // the game already made: its own library, wherever it is
-    const fs::path recomp = game_ready_ ? game_directory_ : library / "decrypted" / "PCSA00029" / "recomp";
-    const int need_gb = game_ready_ ? 1 : 8;   // the library is 3.6 GB, the firmware and the game's copy decrypted on the way
+    // made again from a copy: the first time, or another copy over the game already made (in its own library, wherever it is)
+    const bool remake = !game_ready_ || change_copy_;
+    const fs::path library = game_ready_ ? game_directory_.parent_path().parent_path().parent_path() : base / "library";
+    // the game already made, only compiled again: its own library
+    const fs::path recomp = remake ? library / "decrypted" / "PCSA00029" / "recomp" : game_directory_;
+    const int need_gb = remake ? 8 : 1;   // the library is 3.6 GB, the firmware and the game's copy decrypted on the way
     std::error_code error;
     fs::create_directories(base, error);
     const fs::space_info space = fs::space(base, error);
@@ -1281,7 +1259,7 @@ void Launcher::start_setup() {
         std::lock_guard<std::mutex> hold(setup_lock_);
         setup_error_.clear();
         setup_tail_.clear();
-        setup_step_ = game_ready_ ? 5 : 0;
+        setup_step_ = remake ? 0 : 5;
         setup_progress_ = 0;
         setup_done_ = setup_cancelled_ = false;
         if (!error && space.available < static_cast<std::uintmax_t>(need_gb) << 30) {
@@ -1301,7 +1279,7 @@ void Launcher::start_setup() {
     auto utf8_path = [](const std::string& s) { return fs::u8path(s); };
     const fs::path python = exe_directory_ / "python" / "python.exe";
     std::vector<std::pair<std::wstring, bool>> commands;
-    if (!game_ready_) {
+    if (remake) {
         commands.push_back({quote(python) + L" -u " + quote(exe_directory_ / "tools" / "make_game.py") + L" " + quote(utf8_path(chosen_copy_)) + L" " +
                                 quote(utf8_path(chosen_pup_)) + L" --library " + quote(library), true});
     }
@@ -1354,11 +1332,13 @@ void Launcher::setup_rows() {
         setup_job_ = nullptr;
         find_game();
         if (game_ready_) settings_load((game_directory_ / "settings.ini").string().c_str());
-        if (game_ready_ && !background_is_game_) load_art();   // the game's own artwork, now that there is a copy of it
+        const bool changed = change_copy_ && game_ready_ && setup_error_.empty() && !setup_cancelled_;
+        if (changed) change_copy_ = false;   // (made: the new copy's picture too)
+        if (game_ready_ && (!background_is_game_ || changed)) { background_is_game_ = false; load_art(); }   // the game's own artwork, now that there is a copy of it
         hold.lock();
     }
     const bool running = setup_running_;
-    if (!game_ready_ && !running) {
+    if ((!game_ready_ || change_copy_) && !running) {
         // the dialogs answer on SDL's thread
         auto picked_copy = [](void* self, const char* const* list, int) {
             if (!list || !list[0]) return;
@@ -1379,6 +1359,20 @@ void Launcher::setup_rows() {
             static const SDL_DialogFileFilter filter = {"PUP", "PUP;pup"};
             SDL_ShowOpenFileDialog(picked_pup, this, window_, &filter, 1, pup.empty() ? nullptr : pup.c_str(), false);
         }
+        if (pup.empty()) {   // where it comes from: Sony's own page for the system software, in the launcher's language (as Vita3K points to it)
+            const ImVec2 at(origin_.x + px(46), origin_.y + cursor_ - px(2));
+            const float button_x = origin_.x + panel_width_ - measure(body_bold_, px(18), t.pup_get).x - px(28);
+            list_->PushClipRect(at, ImVec2(button_x - px(12), at.y + px(40)), true);
+            text(body_, px(17), ImVec2(at.x, at.y + px(6)), kDim, t.pup_where);
+            list_->PopClipRect();
+            if (small_button(t.pup_get, ImVec2(button_x, at.y), "##pupget")) {
+                const std::string language = launcher_language();
+                const char* locale = language == "it" ? "it-it" : language == "pt" ? "pt-br" : language == "es" ? "es-es" : "en-us";
+                const std::string url = std::string("https://www.playstation.com/") + locale + "/support/hardware/psvita/system-software/";
+                ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+            cursor_ += px(44);
+        }
         hold.lock();
     }
     if (running) {
@@ -1397,7 +1391,7 @@ void Launcher::setup_rows() {
         return;
     }
     const std::string failure = setup_error_, tail = setup_tail_;
-    const bool can_start = game_ready_ || (!chosen_copy_.empty() && !chosen_pup_.empty());
+    const bool can_start = (game_ready_ && !change_copy_) || (!chosen_copy_.empty() && !chosen_pup_.empty());
     hold.unlock();
     if (!failure.empty()) {
         status(false, t.failed, failure.c_str(), nullptr, "##failed", true);
@@ -1408,7 +1402,7 @@ void Launcher::setup_rows() {
             cursor_ += px(80);
         }
     }
-    lead(game_ready_ ? t.compile_only : t.duration);
+    lead(game_ready_ && !change_copy_ ? t.compile_only : t.duration);
     if (can_start && big_button(t.prepare, "##prepare", true)) start_setup();
 }
 
@@ -1582,10 +1576,6 @@ bool Launcher::status(bool good, const char* heading, const char* detail, const 
     const ImVec2 dot(a.x + px(26), a.y + height / 2);
     list_->AddCircleFilled(dot, px(6), fade(accent));
     list_->AddCircleFilled(dot, px(12), fade(accent, 0.18f));
-    if (pulse) {
-        const float p = std::fmod(static_cast<float>(ImGui::GetTime()), 1.8f) / 1.8f;
-        list_->AddCircle(dot, px(12) + px(14) * p, fade(accent, 0.6f * (1 - p)), 0, px(2));
-    }
     const float button_x = button_label ? b.x - measure(body_bold_, px(18), button_label).x - px(28) - px(14) : b.x;
     list_->PushClipRect(a, ImVec2(button_x - px(12), b.y), true);  // texts stop before the button
     text(body_bold_, px(21), ImVec2(a.x + px(46), a.y + px(9)), kInk, heading);
@@ -1610,36 +1600,7 @@ bool Launcher::big_button(const char* label, const char* id, bool pulse) {
     const float hot = anim(ImGui::GetItemID(), ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride) || nav_selected());
     if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     focus_frame(ImVec2(origin_.x - px(24), a.y - px(8)), ImVec2(origin_.x + panel_width_ + px(14), b.y + px(8)));
-    if (pulse) {
-        const float p = std::fmod(static_cast<float>(ImGui::GetTime()), 2.2f) / 2.2f / 0.7f;
-        if (p < 1) {
-            const float grow = px(18) * p;
-            skewed_rect(list_, ImVec2(a.x - grow, a.y - grow), ImVec2(b.x + grow, b.y + grow), fade(kGold, 0.45f * (1 - p)), fade(kGold, 0.45f * (1 - p)));
-        }
-    }
     skewed_rect(list_, a, b, mix(kGold, IM_COL32(255, 206, 96, 255), hot * 0.6f), mix(kGoldDark, kGold, hot * 0.5f));
-    if (pulse) {  // ready: a light runs round the button's edge, a lap every 2.4 s
-        const float skew = (b.y - a.y) * 0.21f;
-        const ImVec2 corners[] = {ImVec2(a.x + skew, a.y), ImVec2(b.x + skew, a.y), b, ImVec2(a.x, b.y)};  // skewed_rect's
-        float lengths[4], perimeter = 0;
-        for (int i = 0; i < 4; ++i) {
-            const float dx = corners[(i + 1) % 4].x - corners[i].x, dy = corners[(i + 1) % 4].y - corners[i].y;
-            perimeter += lengths[i] = std::sqrt(dx * dx + dy * dy);
-        }
-        const float head = std::fmod(static_cast<float>(ImGui::GetTime()) / 2.4f, 1.0f) * perimeter, tail = px(160);
-        constexpr int kSteps = 24;
-        for (int s = 0; s < kSteps; ++s) {  // the tail fades out behind the head
-            const float d0 = head - tail * static_cast<float>(s) / kSteps, d1 = head - tail * static_cast<float>(s + 1) / kSteps;
-            const auto point = [&](float d) {
-                d = std::fmod(d + perimeter, perimeter);
-                int i = 0;
-                while (i < 3 && d > lengths[i]) d -= lengths[i++];
-                return ImLerp(corners[i], corners[(i + 1) % 4], d / lengths[i]);
-            };
-            const float light = 1 - static_cast<float>(s) / kSteps;
-            list_->AddLine(point(d0), point(d1), fade(mix(IM_COL32(255, 238, 190, 255), IM_COL32_WHITE, light), light), px(3));
-        }
-    }
     text(black_, px(40), ImVec2(a.x + px(55) + px(7), a.y + px(10)), IM_COL32(18, 14, 6, 255), label);
     cursor_ += px(90);
     return pressed;
@@ -1910,14 +1871,26 @@ void Launcher::page_play() {
     const bool ready = game_ready_ && program_ready_;
     title(ready ? t.ready_title : t.setup_title);
     lead(ready ? t.ready_lead : t.setup_lead);
-    std::string detail = "Uncharted: Golden Abyss \xC2\xB7 PCSA00029";
+    std::string detail = "Uncharted: Golden Abyss \xC2\xB7 " + title_id_;
     if (!game_version_.empty()) detail += " \xC2\xB7 " + game_version_;
-    if (tools_ready_ && !ready) {   // a release: the launcher makes the game itself
-        if (game_ready_) status(true, t.game_ok, detail.c_str(), nullptr, "##game");
+    if (tools_ready_ && (!ready || change_copy_)) {   // a release: the launcher makes the game itself
+        if (game_ready_ && !change_copy_ && status(true, t.game_ok, detail.c_str(), t.change_copy, "##game")) {
+            change_copy_ = true;
+            chosen_copy_.clear();
+        }
         setup_rows();
+        if (change_copy_ && !setup_running_) {   // back to the game as it is
+            cursor_ += px(6);
+            if (small_button(t.cancel, ImVec2(origin_.x, origin_.y + cursor_), "##keepcopy")) { change_copy_ = false; chosen_copy_.clear(); }
+            cursor_ += px(48);
+        }
         return;
     }
-    status(game_ready_, game_ready_ ? t.game_ok : t.game_missing, game_ready_ ? detail.c_str() : t.game_missing_detail, nullptr, "##game", !game_ready_);
+    if (status(game_ready_, game_ready_ ? t.game_ok : t.game_missing, game_ready_ ? detail.c_str() : t.game_missing_detail,
+               game_ready_ && tools_ready_ ? t.change_copy : nullptr, "##game", !game_ready_)) {
+        change_copy_ = true;   // the copy and the firmware chosen again, then Prepare
+        chosen_copy_.clear();
+    }
     if (!program_ready_) status(false, t.program_missing, t.program_missing_detail, nullptr, "##program", true);
     status(pad_connected_, pad_connected_ ? t.pad_on : t.pad_off, pad_connected_ ? t.pad_on_detail : t.pad_off_detail, nullptr, "##pad");
     const int current = style();
@@ -2575,17 +2548,17 @@ void Launcher::frame(float now, float dt) {
     const ImVec2 screen(static_cast<float>(width_), static_cast<float>(height_));
     ImDrawList* back = ImGui::GetBackgroundDrawList();
 
-    // The game's picture, blurred, filling the screen and drifting slowly; darkened so the texts read.
+    // The game's picture, filling the screen, still; darkened so the texts read.
     back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(10, 8, 6, 255));
     if (background_) {
         const float picture = static_cast<float>(background_width_) / static_cast<float>(std::max(1, background_height_));
-        const float zoom = 1.08f + 0.03f * std::sin(now * 0.07f);
+        const float zoom = 1.0f;
         float w = screen.x * zoom, h = w / picture;
         if (h < screen.y * zoom) {
             h = screen.y * zoom;
             w = h * picture;
         }
-        const ImVec2 a((screen.x - w) / 2 + px(14) * std::sin(now * 0.05f), (screen.y - h) / 2);
+        const ImVec2 a((screen.x - w) / 2, (screen.y - h) / 2);
         back->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(background_)), a, ImVec2(a.x + w, a.y + h));
     }
     back->AddRectFilled(ImVec2(0, 0), screen, IM_COL32(8, 6, 4, 88));
@@ -2621,18 +2594,7 @@ void Launcher::frame(float now, float dt) {
     glow(px(340) * flicker, 54);
     glow(px(120) * flicker, 40);
 
-    // Light trails and dust in the air.
-    if (random01() < dt * 3) {
-        const float pick = random01();
-        const ImU32 colour = pick < 0.6f ? IM_COL32(226, 168, 44, 255) : pick < 0.85f ? IM_COL32(255, 226, 160, 255) : IM_COL32(255, 255, 255, 255);
-        trails_.push_back({-px(300), screen.y * (0.55f + 0.37f * random01()), px(900 + 900 * random01()), px(200 + 320 * random01()), colour});
-    }
-    for (Trail& trail : trails_) {
-        trail.x += trail.speed * dt;
-        back->AddRectFilledMultiColor(ImVec2(trail.x - trail.length, trail.y), ImVec2(trail.x, trail.y + px(2.5f)),
-                                      trail.colour & ~IM_COL32_A_MASK, trail.colour, trail.colour, trail.colour & ~IM_COL32_A_MASK);
-    }
-    trails_.erase(std::remove_if(trails_.begin(), trails_.end(), [&](const Trail& trail) { return trail.x - trail.length > screen.x; }), trails_.end());
+    // Dust in the air.
     if (motes_.size() != 90) {
         motes_.clear();
         for (int i = 0; i < 90; ++i) motes_.push_back(ImVec4(screen.x * random01(), screen.y * random01(), 0.6f + 1.8f * random01(), 6.28f * random01()));
@@ -2671,7 +2633,7 @@ void Launcher::frame(float now, float dt) {
 // The game's logo (from the player's copy) or its name, and the port's tag under it.
 void Launcher::header(float since) {
     g_alpha = ease_out(since / 1.0f);
-    const ImVec2 logo_at(px(86), px(46) - px(30) * (1 - g_alpha));
+    const ImVec2 logo_at(px(86), px(46));
     if (logo_) {
         const float h = px(132), w = h * static_cast<float>(logo_width_) / static_cast<float>(std::max(1, logo_height_));
         list_->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(logo_)), logo_at, ImVec2(logo_at.x + w, logo_at.y + h), ImVec2(0, 0), ImVec2(1, 1), fade(IM_COL32_WHITE));
@@ -2697,14 +2659,14 @@ void Launcher::header(float since) {
     }
 }
 
-// The current page in the panel on the right, sliding in.
+// The current page in the panel on the right, fading in.
 void Launcher::panel(float now) {
     const float since = now - start_time_;
     const float enter = ease_out((now - page_since_) / 0.45f);
     page_alpha_ = g_alpha = enter * ease_out((since - 0.3f) / 0.6f);
     panel_width_ = px(600);
     const float column_width = panel_width_ + px(84);
-    const float panel_x = static_cast<float>(width_) - column_width + px(50) * (1 - enter);
+    const float panel_x = static_cast<float>(width_) - column_width;
     const float bar_y = static_cast<float>(height_) - px(56), top = px(72);
     view_top_ = px(3);
     view_bottom_ = bar_y;
@@ -2784,12 +2746,12 @@ void Launcher::panel(float now) {
     list_->ChannelsMerge();
 }
 
-// One more title, row or button of the page: it fades in and rises a little, 50 ms after the one above.
+// One more title, row or button of the page: it fades in, 50 ms after the one above.
 void Launcher::enter_item() {
     const float delay = 0.05f * static_cast<float>(std::min(item_count_++, 10));
     const float t = ease_out((static_cast<float>(ImGui::GetTime()) - page_since_ - 0.1f - delay) / 0.35f);
     origin_.y -= item_shift_;
-    item_shift_ = px(14) * (1 - t);
+    item_shift_ = 0;
     origin_.y += item_shift_;
     g_alpha = page_alpha_ * t;
 }

@@ -16,6 +16,10 @@
   `gamedata.bin` has other languages). The launcher's Settings, Game has the game's language, from the copy's own:
   English, French and Spanish in the US copy; English (UK), French, German, Italian and Dutch in the European one.
   Automatic follows Windows' language, else the copy's English.
+- The launcher's first start says where the firmware file comes from, and Get it from Sony opens Sony's page for the PS
+  Vita system software (update 3.74) in the launcher's language; the README links it too. The file is Sony's: the
+  release doesn't carry it. Change copy, on the game's row of the Play page, makes the game again from another copy
+  (the US one or the European), over the one already made; the row names the copy's own release.
 - The game's own menus with a controller or the keyboard: the D-pad or the arrows move to the next button that way (a
   short line under it shows where), Cross / A or Space presses it, Circle / B, Esc or Backspace takes the menu's way
   back; on the main and pause menus' strips left and right turn to the next entry. The console's menus are touch only:

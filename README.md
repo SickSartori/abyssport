@@ -78,7 +78,9 @@ The two pictures of the game are frames at the Vita's own 960x544; the port can 
 - About 9 GB of free disk space.
 - Your own copy of Uncharted: Golden Abyss version **1.00**, the US release **PCSA00029** or the European one
   **PCSF00012**: its folder copied off your console, with its licence `sce_sys/package/work.bin`.
-- The PS Vita system update file `PSVUPDAT.PUP`, version 3.74.
+- The PS Vita system update file `PSVUPDAT.PUP`, version 3.74, from
+  [Sony's page for the PS Vita system software](https://www.playstation.com/en-us/support/hardware/psvita/system-software/)
+  (the launcher's "Get it from Sony" opens it).
 
 ## Controls
 
