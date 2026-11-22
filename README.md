@@ -20,8 +20,8 @@
 The game's ARM code is recompiled ahead of time into a Windows program, with a runtime that stands in for the Vita's
 system and hardware. It is not an emulator: once prepared, the game is a program of your PC.
 
-Nothing of the game ships. You need your own copy of the game version 1.00, the US release PCSA00029 or the European one PCSF00012, and the
-Vita firmware update file (PUP).
+Nothing of the game ships. You need your own copy of the game version 1.00, the US release PCSA00029 or the
+European one PCSF00012, and the Vita firmware update file (PUP).
 
 **Status: early.** The game starts, a new campaign begins and the prologue plays; nothing has been played through
 yet. See [Known issues](#known-issues).
@@ -76,8 +76,8 @@ The two pictures of the game are frames at the Vita's own 960x544; the port can 
 - Windows 10 version 1903 or later, 64-bit.
 - A graphics card with Direct3D 12 or Vulkan.
 - About 9 GB of free disk space.
-- Your own copy of Uncharted: Golden Abyss, US release **PCSA00029** or European release **PCSF00012**, version **1.00**:
-  the `PCSA00029` or `PCSF00012` folder copied off your console, with its licence `sce_sys/package/work.bin`.
+- Your own copy of Uncharted: Golden Abyss version **1.00**, the US release **PCSA00029** or the European one
+  **PCSF00012**: its folder copied off your console, with its licence `sce_sys/package/work.bin`.
 - The PS Vita system update file `PSVUPDAT.PUP`, version 3.74.
 
 ## Controls
@@ -118,8 +118,8 @@ the next start, which "Back to the launcher" makes one click away.
 
 - **Only the prologue has been played.** A new campaign starts and its first chapter plays; nothing past it has been
   tried, so a later chapter may crash, stop or draw wrong. Reports with `abyss.log` are welcome.
-- **One release of the game only**: the US one, PCSA00029, or the European one, PCSF00012, version 1.00. Other regions and patched versions are
-  not supported.
+- **Version 1.00 of the game only**: the US release, PCSA00029, or the European one, PCSF00012. Other regions and
+  patched versions are not supported.
 - **60 frames per second is experimental**: the game was made for 30, and at 60 some things may move or time wrong.
 - **The raw mouse look (F8) is experimental.**
 - **The in-game menu and the key prompts on a keyboard and mouse are new** and little tested.
