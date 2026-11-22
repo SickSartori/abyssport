@@ -203,7 +203,7 @@ target_compile_options(abyssport PRIVATE -w)
 target_compile_definitions(abyssport PRIVATE ABYSS_VERSION="${PROJECT_VERSION}")
 # settings.c is the runtime's, written for POSIX: the Windows layer in front of it here too.
 set_property(SOURCE src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c APPEND PROPERTY COMPILE_OPTIONS ${ABYSS_COMPAT})
-target_link_libraries(abyssport PRIVATE imgui SDL3::SDL3-static pthread)
+target_link_libraries(abyssport PRIVATE imgui SDL3::SDL3-static pthread winhttp)
 # Barlow Semi Condensed (SIL Open Font License, third_party/fonts): the launcher's letters, beside the program.
 add_custom_command(TARGET abyssport POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/third_party/fonts" "$<TARGET_FILE_DIR:abyssport>/fonts"

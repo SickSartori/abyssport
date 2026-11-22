@@ -20,6 +20,8 @@
   Vita system software (update 3.74) in the launcher's language; the README links it too. The file is Sony's: the
   release doesn't carry it. Change copy, on the game's row of the Play page, makes the game again from another copy
   (the US one or the European), over the one already made; the row names the copy's own release.
+- The launcher tells you when a newer abyssport is out (GitHub's latest release, asked when it opens): a notice over
+  Play with what is new and the release page, and a row in About. Settings, Game, Updates switches it off.
 - The game's own menus with a controller or the keyboard: the D-pad or the arrows move to the next button that way (a
   short line under it shows where), Cross / A or Space presses it, Circle / B, Esc or Backspace takes the menu's way
   back; on the main and pause menus' strips left and right turn to the next entry. The console's menus are touch only:

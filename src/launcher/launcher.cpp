@@ -56,6 +56,10 @@
 #include "launcher_game.h"
 #endif
 #include "game_texts.h"
+#include "update_check.h"
+#ifndef ABYSS_LAUNCHER_IN_GAME
+#include <winhttp.h>
+#endif
 
 extern "C" {
 #include "settings.h"
@@ -111,6 +115,9 @@ struct Texts {
     // the first run: where the firmware file comes from (Sony's page for the Vita's system software)
     const char *pup_where, *pup_get;
     const char *change_copy;   // Play: another copy of the game (US or European), made again
+    // the update check (mc3port's): About's row, the notice over Play, the setting
+    const char *checking, *up_to_date, *update_found, *update_sub, *update_open, *update_title, *update_lead, *update_page,
+        *update_portable_note, *update_later, *check_updates, *check_updates_detail;
 };
 
 const Texts kItalian = {
@@ -199,6 +206,9 @@ const Texts kItalian = {
     {"Chiedi", "Standard", "PS TV"},
     "Il file si scarica dal sito di Sony: l'aggiornamento del sistema PS Vita 3.74.", "Scarica da Sony",
     "Cambia copia",
+    "Cerco una versione nuova...", "Questa è l'ultima versione", "È uscito abyssport %s", "Sulla pagina della release, con le novità", "Apri",
+    "NUOVA VERSIONE", "È uscito abyssport %s. Le novità:", "APRI LA PAGINA", "Questa copia è portatile: scarica la nuova versione dalla pagina della release.",
+    "Più tardi", "Aggiornamenti", "Cerca un nuovo abyssport su GitHub quando si apre il launcher",
 };
 
 const Texts kEnglish = {
@@ -287,6 +297,9 @@ const Texts kEnglish = {
     {"Ask", "Standard", "PS TV"},
     "The file comes from Sony's website: the PS Vita system update 3.74.", "Get it from Sony",
     "Change copy",
+    "Looking for a new version...", "This is the latest version", "abyssport %s is out", "On the release page, with what is new", "Open",
+    "NEW VERSION", "abyssport %s is out. What is new:", "OPEN THE PAGE", "This copy is portable: download the new version from the release page.",
+    "Later", "Updates", "Look for a new abyssport on GitHub when the launcher opens",
 };
 
 std::string setting(const char* key, const char* def) {
@@ -380,6 +393,9 @@ const Texts kPortuguese = {
     {"Perguntar", "Padrão", "PS TV"},
     "O arquivo é baixado do site da Sony: a atualização do sistema PS Vita 3.74.", "Baixar da Sony",
     "Trocar cópia",
+    "Procurando uma versão nova...", "Esta é a versão mais recente", "Saiu o abyssport %s", "Na página da versão, com as novidades", "Abrir",
+    "NOVA VERSÃO", "Saiu o abyssport %s. Novidades:", "ABRIR A PÁGINA", "Esta cópia é portátil: baixe a nova versão na página da versão.",
+    "Mais tarde", "Atualizações", "Procurar um novo abyssport no GitHub ao abrir o launcher",
 };
 
 const Texts kSpanish = {
@@ -468,6 +484,9 @@ const Texts kSpanish = {
     {"Preguntar", "Estándar", "PS TV"},
     "El archivo se descarga de la web de Sony: la actualización del sistema PS Vita 3.74.", "Descargar de Sony",
     "Cambiar copia",
+    "Buscando una versión nueva...", "Es la última versión", "Ha salido abyssport %s", "En la página de la versión, con las novedades", "Abrir",
+    "NUEVA VERSIÓN", "Ha salido abyssport %s. Novedades:", "ABRIR LA PÁGINA", "Esta copia es portátil: descarga la nueva versión de la página de la versión.",
+    "Más tarde", "Actualizaciones", "Buscar un abyssport nuevo en GitHub al abrir el launcher",
 };
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
@@ -626,6 +645,73 @@ const char* const kGameTextsSpanish[GT_COUNT] = {
 };
 
 // The game's languages: the names its text files have (find_game reads a copy's), what each is called, and the console's code for it that the game is told (RECOMP_LANGUAGE, apputil.c).
+// --- update check (a thread at the start; mc3port's launcher's) ---
+struct UpdateCheck {
+    std::mutex mutex;
+    int state = 3;  // 0 checking, 1 up to date, 2 newer found, 3 none (off, failed, or the game's menu)
+    std::string version, url;
+    std::vector<std::string> points;  // what is new, from the release's notes
+};
+#ifndef ABYSS_LAUNCHER_IN_GAME
+constexpr char kRepository[] = "SickSartori/abyssport";
+// A GET over HTTPS (WinHTTP follows redirects), at most a few seconds each way; the body only when the answer is 200.
+std::string https_get(const std::wstring& url, const wchar_t* headers, DWORD* status) {
+    std::string body;
+    *status = 0;
+    wchar_t host[256] = {}, path[2048] = {}, query[2048] = {};
+    URL_COMPONENTS parts = {sizeof(parts)};
+    parts.lpszHostName = host;
+    parts.dwHostNameLength = 256;
+    parts.lpszUrlPath = path;
+    parts.dwUrlPathLength = 2048;
+    parts.lpszExtraInfo = query;
+    parts.dwExtraInfoLength = 2048;
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts) || parts.nScheme != INTERNET_SCHEME_HTTPS) return body;
+    const std::wstring target = std::wstring(path) + query;
+    const std::string version = ABYSS_VERSION;
+    const std::wstring agent = L"abyssport/" + std::wstring(version.begin(), version.end());
+    HINTERNET session = WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, nullptr, nullptr, 0);
+    if (session) WinHttpSetTimeouts(session, 5000, 5000, 5000, 5000);   // (closing the launcher waits for it)
+    HINTERNET connection = session ? WinHttpConnect(session, host, parts.nPort, 0) : nullptr;
+    HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET", target.c_str(), nullptr, nullptr, nullptr, WINHTTP_FLAG_SECURE) : nullptr;
+    DWORD size = sizeof(*status);
+    if (request && WinHttpSendRequest(request, headers ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers ? static_cast<DWORD>(-1) : 0, nullptr, 0, 0, 0) &&
+        WinHttpReceiveResponse(request, nullptr) &&
+        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, nullptr, status, &size, nullptr) && *status == 200) {
+        char buffer[16384];
+        DWORD read = 0;
+        while (WinHttpReadData(request, buffer, sizeof(buffer), &read) && read) body.append(buffer, read);
+    }
+    if (request) WinHttpCloseHandle(request);
+    if (connection) WinHttpCloseHandle(connection);
+    if (session) WinHttpCloseHandle(session);
+    return body;
+}
+// ABYSS_UPDATE_TEST=<version>: the launcher takes itself for that version (a test of the notice).
+const char* update_test() {
+    static char version[32] = {};
+    static const bool set = GetEnvironmentVariableA("ABYSS_UPDATE_TEST", version, sizeof(version)) > 0;
+    return set ? version : nullptr;
+}
+// The latest release on GitHub: its tag, its page (only the repository's own) and the points of its notes.
+void check_for_updates(UpdateCheck* check) {
+    wchar_t latest[160];
+    std::swprintf(latest, 160, L"https://api.github.com/repos/%hs/releases/latest", kRepository);
+    DWORD status = 0;
+    const std::string body = https_get(latest, L"Accept: application/vnd.github+json\r\n", &status);
+    const std::string tag = update::json_text(body, "tag_name"), url = update::json_text(body, "html_url");
+    std::lock_guard<std::mutex> lock(check->mutex);
+    if (tag.empty()) {
+        check->state = 3;
+        return;
+    }
+    check->state = update::version_numbers(tag) > update::version_numbers(update_test() ? update_test() : ABYSS_VERSION) ? 2 : 1;
+    check->version = tag;
+    check->url = update::release_link(url, kRepository, "tag/") ? url : std::string("https://github.com/") + kRepository + "/releases";
+    check->points = update::release_points(update::json_text(body, "body"), 6);
+}
+#endif
+
 struct GameLanguage { const char *code, *name, *console; };
 const GameLanguage kGameLanguages[] = {
     {"en", "English (US)", "1"}, {"en-gb", "English (UK)", "18"}, {"fr", "Franç" "ais", "2"}, {"de", "Deutsch", "4"},
@@ -751,6 +837,9 @@ private:
     bool run_tool(const std::wstring& command, bool making);
     void setup_rows();
     void cancel_setup();
+    void update_row();
+    bool update_available();
+    void page_update();
     void frame(float now, float dt);
     void header(float since);
     void panel(float now);
@@ -865,6 +954,9 @@ private:
     bool prepare_auto_ = false;              // ABYSS_LAUNCHER_PREPARE: started by a script, which waits for the end
     std::string game_version_;
     std::vector<std::string> game_languages_;   // the copy's (game_language)
+    UpdateCheck updates_;
+    std::thread update_thread_;
+    bool update_prompt_ = false, update_prompt_shown_ = false;   // the new version's notice, over Play once a start
     bool change_copy_ = false;                  // Play's Change copy: the first run's rows again, over the game already made
     std::string title_id_ = "PCSA00029";        // the copy's own: the US release, or PCSF00012, the European (its param.sfo)
 
@@ -975,6 +1067,7 @@ bool Launcher::start() {
 
 void Launcher::stop() {
     if (setup_thread_.joinable()) cancel_setup();   // closing the launcher ends the tools and compilers too
+    if (update_thread_.joinable()) update_thread_.join();
     if (device_) SDL_WaitForGPUIdle(device_);
     if (ImGui::GetCurrentContext()) {
         ImGui_ImplSDLGPU3_Shutdown();
@@ -1868,6 +1961,11 @@ void Launcher::style_row() {
 
 void Launcher::page_play() {
     const Texts& t = T();
+    if (!update_prompt_shown_ && !in_game_ && update_available()) update_prompt_ = update_prompt_shown_ = true;
+    if (update_prompt_) {
+        page_update();
+        return;
+    }
     const bool ready = game_ready_ && program_ready_;
     title(ready ? t.ready_title : t.setup_title);
     lead(ready ? t.ready_lead : t.setup_lead);
@@ -1957,6 +2055,8 @@ void Launcher::page_settings() {
         const char* language_values[] = {"auto", "it", "en", "pt", "es"};
         row(t.language, nullptr, 420);
         choice("launcher_language", "auto", language_values, t.language_names, 5, nullptr, 420);
+        row(t.check_updates, t.check_updates_detail);
+        choice("check_updates", "1", off_on, no_yes, 2);
         if (!game_languages_.empty()) {
             // Automatic, then the copy's languages (the US copy: English, French, Spanish; the European one: English,
             // French, German, Italian, Dutch)
@@ -2512,6 +2612,59 @@ void Launcher::how_page(float now) {
     cursor_ += line * 3 + px(4);
 }
 
+// About's row: looking, up to date, or the new version with its page (nothing when the check is off or failed).
+void Launcher::update_row() {
+    const Texts& t = T();
+    int state;
+    std::string version, url;
+    {
+        std::lock_guard<std::mutex> lock(updates_.mutex);
+        state = updates_.state, version = updates_.version, url = updates_.url;
+    }
+    if (state == 3 || !settings_int("check_updates", 1)) return;
+    if (state == 2) {
+        char found[96];
+        std::snprintf(found, sizeof(found), t.update_found, version.c_str());
+        if (status(false, found, t.update_sub, t.update_open, "##update")) ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    } else {
+        status(true, state == 0 ? t.checking : t.up_to_date, "", nullptr, "##uptodate");
+    }
+}
+bool Launcher::update_available() {
+    if (!settings_int("check_updates", 1)) return false;
+    std::lock_guard<std::mutex> lock(updates_.mutex);
+    return updates_.state == 2;
+}
+// The new version's notice, over Play once a start: what is new, the release page, or Later.
+void Launcher::page_update() {
+    const Texts& t = T();
+    std::string version, url;
+    std::vector<std::string> points;
+    {
+        std::lock_guard<std::mutex> lock(updates_.mutex);
+        version = updates_.version, url = updates_.url, points = updates_.points;
+    }
+    title(t.update_title);
+    char line[256];
+    std::snprintf(line, sizeof(line), t.update_lead, version.c_str());
+    lead(line);
+    for (const std::string& point : points) {
+        const float wrap = panel_width_ - px(24);
+        const ImVec2 at(origin_.x, origin_.y + cursor_), size = measure(body_, px(18), point.c_str(), wrap);
+        list_->AddRectFilled(ImVec2(at.x + px(2), at.y + px(9)), ImVec2(at.x + px(9), at.y + px(16)), fade(kGold));
+        text(body_, px(18), ImVec2(at.x + px(24), at.y), kInk, point.c_str(), wrap);
+        cursor_ += size.y + px(10);
+    }
+    cursor_ += px(8);
+    if (big_button(t.update_page, "##update_page", false)) ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    lead(t.update_portable_note);
+    if (small_button(t.update_later, ImVec2(origin_.x, origin_.y + cursor_), "##update_later")) {
+        update_prompt_ = false;
+        page_since_ = static_cast<float>(ImGui::GetTime());
+    }
+    cursor_ += px(52);
+}
+
 void Launcher::page_about() {
     const Texts& t = T();
     title(t.about);
@@ -2523,6 +2676,7 @@ void Launcher::page_about() {
         cursor_ += std::max(px(30), measure(body_bold_, px(18), value, wrap).y + px(12));
     };
     fact(t.version, ABYSS_VERSION);
+    update_row();
     fact(t.licence, t.licence_text);   // (the credits are on GitHub: README.md, THIRD_PARTY.md)
     cursor_ += px(6);
     if (game_ready_) {
@@ -3187,6 +3341,12 @@ int Launcher::run() {
         stop();
         return 1;
     }
+#ifndef ABYSS_LAUNCHER_IN_GAME
+    if (settings_int("check_updates", 1) && !std::getenv("RECOMPLAUNCHER") && !std::getenv("ABYSS_LAUNCHER_PLAY")) {   // (off, or RecompLauncher's own updates: nothing is asked)
+        updates_.state = 0;
+        update_thread_ = std::thread(check_for_updates, &updates_);
+    }
+#endif
     const char* shot = std::getenv("ABYSS_LAUNCHER_SHOT");
     if (const char* page = std::getenv("ABYSS_LAUNCHER_PAGE")) page_ = static_cast<Page>(std::clamp(std::atoi(page), 0, 3));
     if (const char* tab = std::getenv("ABYSS_LAUNCHER_TAB")) settings_tab_ = controls_tab_ = std::atoi(tab);

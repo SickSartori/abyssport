@@ -177,7 +177,10 @@ copy. The release carries its own source code in `source/` (GPL), and the licenc
 
 ## Privacy
 
-abyssport makes no network connection: nothing is sent, and nothing is downloaded while it prepares or runs the game.
+abyssport collects no personal data and has no telemetry, and nothing is downloaded while it prepares or runs the
+game. The only connection it makes on its own is the update check: when the launcher opens, it asks `api.github.com`
+for this project's latest release and tells you if there is a newer one. Settings, Game, Updates turns it off; started
+from RecompLauncher, it is always off.
 
 ## Supporting the project
 
