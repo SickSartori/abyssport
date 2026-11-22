@@ -27,7 +27,9 @@
   back; on the main and pause menus' strips left and right turn to the next entry. The console's menus are touch only:
   these are the same touches, made for you. With no menu on screen the keys and buttons play the game as before.
 - RecompLauncher: `recomplauncher.json` in the release (Play starts the game once it is prepared; resolution, frame
-  rate, window, controls, mouse sensitivity and volume on the game's page), and the release zip is named
+  rate, window, controls, mouse sensitivity and volume on the game's page; Easy Setup: the player's copy and the
+  firmware file are asked for in RecompLauncher, and `tools/prepare.py` makes the game without a window, as Prepare
+  does), and the release zip is named
   `abyssport-<version>-windows-x64.zip`. The launcher's first start keeps a resolution or frame rate set from outside
   instead of applying the Enhanced style over it. With no controller connected, RecompLauncher's {pad}
   (`RECOMPLAUNCHER_PAD`) chooses How to play's device and the in-game menu's button names (PlayStation's, or the
