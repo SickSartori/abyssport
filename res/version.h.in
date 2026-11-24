@@ -1,0 +1,4 @@
+/* The version res/utf8.rc writes into the programs' version information (Properties, Details in Explorer), from
+ * CMakeLists.txt's project() by configure_file: build/<preset>/generated/abyss_version.h. */
+#define ABYSS_VERSION_RC  @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+#define ABYSS_VERSION_STR "@PROJECT_VERSION@"

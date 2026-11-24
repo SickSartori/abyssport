@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The launcher (`abyssport.exe`) has version information (Properties, Details: abyssport launcher, its version) and
+  is stripped of the debug sections the static C and C++ libraries brought: 0.1.0's was flagged on VirusTotal by
+  Bitdefender's engine (Gen:Variant.Lazy, a heuristic false alarm), which held its listing on RecompLauncher. The
+  game, `abyss.exe`, gets the same version information from the runtime.
+
 ## 0.1.0 (2026-11-22)
 
 ### Added
