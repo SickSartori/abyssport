@@ -2,6 +2,7 @@
 """Put the release together in dist/abyssport-<version> and zip it. Local only: nothing is uploaded.
 
   python tools/make_package.py [--build build/pc-x64]
+  python tools/make_package.py --sign <the zip the workflow built>
 
 Needs a finished build (the launcher and the runtime library) and toolchain/llvm-mingw (tools/get_toolchain.py).
 Downloads, pinned by version and SHA-256 and kept in dist/downloads: Python's embeddable distribution and the two
@@ -72,12 +73,37 @@ def copytree(src, dst, drop=()):
     shutil.copytree(src, dst, ignore=lambda d, names: [n for n in names if n == "__pycache__" or any(fnmatch.fnmatch(n, p) for p in drop)])
 
 
+def sign(package, version):
+    """The workflow's zip again, with the launcher code signed, and its SHA256SUMS. GitHub Actions cannot sign: the
+    certificate's key is reached through SimplySign Desktop on the author's PC, whose session must be open."""
+    dist = os.path.join(ROOT, "dist"); out = os.path.join(dist, f"abyssport-{version}")
+    if os.path.exists(out): shutil.rmtree(out)
+    os.makedirs(dist, exist_ok=True)
+    unzip(package, dist)
+    exe = os.path.join(out, "abyssport.exe")
+    if not os.path.isfile(exe): die(f"{package} does not hold abyssport-{version}/abyssport.exe")
+    tools = sorted(glob.glob(os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Windows Kits", "10", "bin", "*", "x64", "signtool.exe")))
+    if not tools: die("signtool.exe not found: it comes with the Windows SDK")
+    # SHA-256, and Certum's time stamp: the signature stays valid after the certificate expires
+    # (/a: the code signing certificate in this user's store)
+    if (subprocess.run([tools[-1], "sign", "/a", "/fd", "SHA256", "/tr", "http://time.certum.pl", "/td", "SHA256", exe]).returncode
+            or subprocess.run([tools[-1], "verify", "/pa", "/q", exe]).returncode): die("signing failed: is SimplySign Desktop's session open?")
+    archive = shutil.make_archive(out + "-windows-x64", "zip", dist, os.path.basename(out))
+    h = hashlib.sha256()
+    with open(archive, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    with open(os.path.join(dist, "SHA256SUMS"), "w", newline="\n") as f: f.write(f"{h.hexdigest()}  {os.path.basename(archive)}\n")
+    print(f"signed: {archive} ({os.path.getsize(archive) >> 20} MB), sha256 {h.hexdigest()}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--build", default=os.path.join(ROOT, "build", "pc-x64"))
+    ap.add_argument("--sign", metavar="ZIP", help="code sign the launcher of a zip the workflow built, instead of packaging")
     a = ap.parse_args()
     build = os.path.abspath(a.build)
     version = re.search(r"project\(abyssport VERSION ([0-9.]+)", open(os.path.join(ROOT, "CMakeLists.txt"), encoding="utf-8").read()).group(1)
+    if a.sign: return sign(os.path.abspath(a.sign), version)
     toolchain = os.path.join(ROOT, "toolchain", "llvm-mingw")
     for f in [os.path.join(build, "abyssport.exe"), os.path.join(toolchain, "bin", "x86_64-w64-mingw32-clang.exe")] + [os.path.join(build, l) for l in RUNTIME_LIBS]:
         if not os.path.isfile(f): die(f"{f} is missing: build first (cmake --build --preset pc-x64-release) and fetch the toolchain")
