@@ -50,13 +50,15 @@ jobs:
           cmake --build --preset pc-x64-release
           if ($LASTEXITCODE) { throw "build failed" }
 
+      - name: Install Inno Setup (for the installer)
+        run: choco install innosetup --version=6.7.1 --allow-downgrade --no-progress -y
+
+      # The zip, the installer and their SHA256SUMS.
       - name: Package
         shell: pwsh
         run: |
           python tools/make_package.py
           if ($LASTEXITCODE) { throw "packaging failed" }
-          $zip = Get-ChildItem dist -Filter *.zip -File
-          "$((Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLower())  $($zip.Name)" | Set-Content dist/SHA256SUMS
 
       - name: Make the draft release
         if: startsWith(github.ref, 'refs/tags/')
@@ -71,4 +73,6 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: abyssport-windows
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*-setup.exe

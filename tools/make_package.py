@@ -16,6 +16,9 @@ packages tools/make_game.py needs. No game code or data goes in: the player's la
   toolchain/llvm-mingw                   the compiler, its x86-64 part only
   licenses/, docs/                       the licences of what is shipped; the controls guide
   source/                                abyssport's source at HEAD (git archive): the GPL's offer
+
+Beside the zip, the same folder as an installer (installer/abyssport.iss, with Inno Setup 6.6+; skipped with a
+warning when it is not installed, an error on GitHub Actions), and SHA256SUMS for both.
 """
 import argparse
 import fnmatch
@@ -73,9 +76,47 @@ def copytree(src, dst, drop=()):
     shutil.copytree(src, dst, ignore=lambda d, names: [n for n in names if n == "__pycache__" or any(fnmatch.fnmatch(n, p) for p in drop)])
 
 
+# SHA-256, and Certum's time stamp: the signature stays valid after the certificate expires (/a: the code signing
+# certificate in this user's store)
+SIGNING = ["sign", "/a", "/fd", "SHA256", "/tr", "http://time.certum.pl", "/td", "SHA256"]
+
+
+def installer(out, version, dist, signtool=None):
+    """dist/abyssport-<version>-windows-x64-setup.exe from the package's folder; signed, with its uninstaller, when
+    signtool is given. None when Inno Setup is not here."""
+    found = [p for p in (os.environ.get("ISCC"), os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Inno Setup 6", "ISCC.exe"),
+                         os.path.join(os.environ.get("ProgramFiles", ""), "Inno Setup 6", "ISCC.exe"),
+                         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Inno Setup 6", "ISCC.exe")) if p and os.path.isfile(p)]
+    if not found:
+        if os.environ.get("GITHUB_ACTIONS"): die("Inno Setup not found: the release needs the installer")
+        print("  warning: Inno Setup not found: no installer")
+        return None
+    print("the installer", flush=True)
+    command = [found[0], "/Q", f"/DAppVersion={version}", f"/DSourceDir={out}", f"/DOutputDir={dist}"]
+    # ($q is a quote and $f the file, to Inno Setup: it signs the uninstaller it puts inside, then the installer)
+    if signtool: command += ["/DSign", "/Ssign=$q" + signtool + "$q " + " ".join(SIGNING) + " $f"]
+    if subprocess.run(command + [os.path.join(ROOT, "installer", "abyssport.iss")]).returncode: die("the installer was not built")
+    setup = os.path.join(dist, f"abyssport-{version}-windows-x64-setup.exe")
+    if signtool and subprocess.run([signtool, "verify", "/pa", "/q", setup]).returncode: die("the installer's signature does not verify")
+    return setup
+
+
+def sums(dist, files):
+    """dist/SHA256SUMS of the release's files."""
+    lines = []
+    for path in files:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+        lines.append(f"{h.hexdigest()}  {os.path.basename(path)}")
+        print(f"{os.path.basename(path)}  ({os.path.getsize(path) >> 20} MB)  sha256 {h.hexdigest()}")
+    with open(os.path.join(dist, "SHA256SUMS"), "w", newline="\n") as f: f.write("\n".join(lines) + "\n")
+
+
 def sign(package, version):
-    """The workflow's zip again, with the launcher code signed, and its SHA256SUMS. GitHub Actions cannot sign: the
-    certificate's key is reached through SimplySign Desktop on the author's PC, whose session must be open."""
+    """The workflow's zip again, with the launcher code signed, the installer made again from it and signed, and their
+    SHA256SUMS. GitHub Actions cannot sign: the certificate's key is reached through SimplySign Desktop on the
+    author's PC, whose session must be open."""
     dist = os.path.join(ROOT, "dist"); out = os.path.join(dist, f"abyssport-{version}")
     if os.path.exists(out): shutil.rmtree(out)
     os.makedirs(dist, exist_ok=True)
@@ -84,16 +125,12 @@ def sign(package, version):
     if not os.path.isfile(exe): die(f"{package} does not hold abyssport-{version}/abyssport.exe")
     tools = sorted(glob.glob(os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Windows Kits", "10", "bin", "*", "x64", "signtool.exe")))
     if not tools: die("signtool.exe not found: it comes with the Windows SDK")
-    # SHA-256, and Certum's time stamp: the signature stays valid after the certificate expires
-    # (/a: the code signing certificate in this user's store)
-    if (subprocess.run([tools[-1], "sign", "/a", "/fd", "SHA256", "/tr", "http://time.certum.pl", "/td", "SHA256", exe]).returncode
+    if (subprocess.run([tools[-1]] + SIGNING + [exe]).returncode
             or subprocess.run([tools[-1], "verify", "/pa", "/q", exe]).returncode): die("signing failed: is SimplySign Desktop's session open?")
     archive = shutil.make_archive(out + "-windows-x64", "zip", dist, os.path.basename(out))
-    h = hashlib.sha256()
-    with open(archive, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
-    with open(os.path.join(dist, "SHA256SUMS"), "w", newline="\n") as f: f.write(f"{h.hexdigest()}  {os.path.basename(archive)}\n")
-    print(f"signed: {archive} ({os.path.getsize(archive) >> 20} MB), sha256 {h.hexdigest()}")
+    setup = installer(out, version, dist, tools[-1])
+    if not setup: die("the signed release needs the installer: install Inno Setup 6.6 or later")
+    sums(dist, [setup, archive])
 
 
 def main():
@@ -181,7 +218,9 @@ def main():
     print("zipping", flush=True)
     archive = shutil.make_archive(out + "-windows-x64", "zip", dist, os.path.basename(out))   # system and CPU in the name: launchers pick the file by them
     size = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(out) for f in fs)
-    print(f"done: {out} ({size >> 20} MB), {archive} ({os.path.getsize(archive) >> 20} MB)")
+    print(f"done: {out} ({size >> 20} MB)")
+    setup = installer(out, version, dist)
+    sums(dist, ([setup] if setup else []) + [archive])
 
 
 if __name__ == "__main__":
