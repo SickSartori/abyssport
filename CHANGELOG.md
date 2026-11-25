@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+### Added
+
+- **An installer**, `abyssport-<version>-windows-x64-setup.exe`, beside the zip: it installs for your user without
+  administrator rights, with shortcuts and an uninstaller, and offers to start the launcher, which asks for your copy
+  of the game and the firmware file and makes the game as before. Uninstalling leaves the game it made and your saved
+  games in the installation folder. The installer and its uninstaller are code signed, like the launcher.
+
 ## 0.1.1 (2026-11-25)
 
 ### Fixed

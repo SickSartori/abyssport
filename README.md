@@ -28,7 +28,9 @@ yet. See [Known issues](#known-issues).
 
 ## How to play
 
-1. Unzip the release anywhere with about 9 GB free.
+1. Run the installer, `abyssport-<version>-windows-x64-setup.exe` (it installs for your user only, without
+   administrator rights), or unzip `abyssport-<version>-windows-x64.zip` anywhere. Either way you need about 9 GB
+   free.
 2. Open `abyssport.exe`. The first time it asks for your copy of the game (the `PCSA00029` or `PCSF00012` folder
    copied off the console, with its licence `sce_sys/package/work.bin`) and the firmware file `PSVUPDAT.PUP`
    (system update 3.74).
@@ -155,7 +157,8 @@ abyssport is built on Windows. You need Python 3.11 or later and CMake 3.25 or l
 
 The release: `python tools/make_package.py` puts the launcher, the runtime compiled (`libabyssrt.a`), the tools,
 an embedded Python and the x86-64 part of llvm-mingw in `dist/abyssport-<version>` and zips it. On the player's PC
-`tools/build_game.py` compiles the game's code and links it to that runtime.
+`tools/build_game.py` compiles the game's code and links it to that runtime. With Inno Setup 6.6 or later installed,
+the same folder also becomes the installer (`installer/abyssport.iss`).
 
 ## How this was made
 
@@ -179,7 +182,7 @@ copy. The release carries its own source code in `source/` (GPL), and the licenc
 
 ## Code signing policy
 
-From 0.1.1 the launcher, `abyssport.exe`, is code signed with a Certum Open Source Code Signing certificate issued to
+From 0.1.1 the launcher, `abyssport.exe`, and from 0.1.2 the installer and its uninstaller, are code signed with a Certum Open Source Code Signing certificate issued to
 the author: Windows shows the publisher **Open Source Developer Gabriel Sartori**. The package is built from this
 repository by GitHub Actions ([release workflow](.github/workflows/release.yml)); the author then signs the launcher
 of that same package on their own PC (`tools/make_package.py --sign`: the key cannot leave Certum's service, so the
