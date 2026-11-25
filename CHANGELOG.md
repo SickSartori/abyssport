@@ -8,6 +8,10 @@
   is stripped of the debug sections the static C and C++ libraries brought: 0.1.0's was flagged on VirusTotal by
   Bitdefender's engine (Gen:Variant.Lazy, a heuristic false alarm), which held its listing on RecompLauncher. The
   game, `abyss.exe`, gets the same version information from the runtime.
+- The launcher is code signed (Windows shows the publisher "Open Source Developer Gabriel Sartori"); README: Code
+  signing policy. `tools/make_package.py --sign <zip>` signs the launcher of the zip the workflow built.
+- The game started with its window minimised (a shortcut set so) no longer stops at once: the window is shown first.
+  Minimised, it had no size, the game could not draw in it and stopped as its menu was made.
 
 ### Added
 

@@ -177,6 +177,16 @@ copy. The release carries its own source code in `source/` (GPL), and the licenc
 - Uncharted: Golden Abyss is a game by Bend Studio, published by Sony Computer Entertainment. abyssport is not
   affiliated with or endorsed by them.
 
+## Code signing policy
+
+From 0.1.1 the launcher, `abyssport.exe`, is code signed with a Certum Open Source Code Signing certificate issued to
+the author: Windows shows the publisher **Open Source Developer Gabriel Sartori**. The package is built from this
+repository by GitHub Actions ([release workflow](.github/workflows/release.yml)); the author then signs the launcher
+of that same package on their own PC (`tools/make_package.py --sign`: the key cannot leave Certum's service, so the
+workflow cannot sign) and uploads it to the release with its `SHA256SUMS`. The game, `abyss.exe`, is made on your PC
+from your copy and is not signed; the third-party programs in the package (Python, FFmpeg, the compiler) are as their
+authors published them.
+
 ## Privacy
 
 abyssport collects no personal data and has no telemetry, and nothing is downloaded while it prepares or runs the
