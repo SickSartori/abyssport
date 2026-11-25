@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(abyssport VERSION 0.1.0 LANGUAGES C CXX RC)
+project(abyssport VERSION 0.1.1 LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -97,6 +97,8 @@ target_compile_options(atrac9 PRIVATE -w)
 file(READ third_party/kenney-prompts/prompts.png ABYSS_PROMPTS HEX)
 string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," ABYSS_PROMPTS "${ABYSS_PROMPTS}")
 file(WRITE "${CMAKE_BINARY_DIR}/generated/prompts_png.h" "static const unsigned char prompts_png[] = {${ABYSS_PROMPTS}};\n")
+# The version res/utf8.rc writes into both programs' version information.
+configure_file(res/version.h.in "${CMAKE_BINARY_DIR}/generated/abyss_version.h" @ONLY)
 
 # The program: the host of the recompiled code and the Vita's system: kernel, files, graphics, audio, input.
 # The runtime is adapted from Project Nativ.
@@ -198,9 +200,13 @@ endif()
 # played on a PC); Play starts abyss. In the look of mc3port's and sm2port's launchers, on SDL3. A window program:
 # no console behind it.
 add_executable(abyssport WIN32 src/launcher/launcher.cpp res/utf8.rc src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c)
-target_include_directories(abyssport PRIVATE src/core src/platform "${CMAKE_SOURCE_DIR}")
+target_include_directories(abyssport PRIVATE src/core src/platform "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/generated")
 target_compile_options(abyssport PRIVATE -w)
-target_compile_definitions(abyssport PRIVATE ABYSS_VERSION="${PROJECT_VERSION}")
+# (ABYSS_RC_LAUNCHER: res/utf8.rc's version information names the launcher, not the game)
+target_compile_definitions(abyssport PRIVATE ABYSS_VERSION="${PROJECT_VERSION}" ABYSS_RC_LAUNCHER)
+# Stripped: the debug sections the static C and C++ libraries bring (700 KB, odd section names /4, /18...) are no use
+# to a player and count against the launcher with antivirus heuristics.
+target_link_options(abyssport PRIVATE -s)
 # settings.c is the runtime's, written for POSIX: the Windows layer in front of it here too.
 set_property(SOURCE src/core/settings.c src/platform/win32_compat.c src/platform/platform_win32.c APPEND PROPERTY COMPILE_OPTIONS ${ABYSS_COMPAT})
 target_link_libraries(abyssport PRIVATE imgui SDL3::SDL3-static pthread winhttp)
@@ -209,4 +215,4 @@ add_custom_command(TARGET abyssport POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/third_party/fonts" "$<TARGET_FILE_DIR:abyssport>/fonts"
     # abyssport's own artwork (tools/art/make_art.py): the backgrounds before there is a copy of the game, the emblem
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/res/launcher" "$<TARGET_FILE_DIR:abyssport>/art")
-set_property(SOURCE res/utf8.rc APPEND PROPERTY OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/utf8.manifest;${CMAKE_SOURCE_DIR}/res/abyssport.ico")
+set_property(SOURCE res/utf8.rc APPEND PROPERTY OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/utf8.manifest;${CMAKE_SOURCE_DIR}/res/abyssport.ico;${CMAKE_BINARY_DIR}/generated/abyss_version.h")

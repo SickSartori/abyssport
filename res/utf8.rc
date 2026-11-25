@@ -1,4 +1,48 @@
-// The resources of abyss.exe and abyssport.exe: the manifest (res/utf8.manifest: UTF-8 as their code page) and the
-// icon (res/abyssport.ico, drawn by tools/art/make_art.py).
+// The resources of abyss.exe and abyssport.exe: the manifest (res/utf8.manifest: UTF-8 as their code page), the
+// icon (res/abyssport.ico, drawn by tools/art/make_art.py) and the version information. A program without the last
+// is one antivirus heuristics trust less (a false alarm on 0.1.0's launcher); abyss.exe gets it from libabyssrt.a.
+#include <winver.h>
+#include "abyss_version.h"   // (generated: res/version.h.in)
+
 1 24 "utf8.manifest"
 1 ICON "abyssport.ico"
+
+#ifdef ABYSS_RC_LAUNCHER
+#define ABYSS_RC_DESCRIPTION "abyssport launcher"
+#define ABYSS_RC_NAME        "abyssport"
+#define ABYSS_RC_FILE        "abyssport.exe"
+#else
+#define ABYSS_RC_DESCRIPTION "abyssport game"
+#define ABYSS_RC_NAME        "abyss"
+#define ABYSS_RC_FILE        "abyss.exe"
+#endif
+
+1 VERSIONINFO
+FILEVERSION    ABYSS_VERSION_RC
+PRODUCTVERSION ABYSS_VERSION_RC
+FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+FILEFLAGS      0
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       VFT_APP
+FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "SickSartori"
+            VALUE "FileDescription",  ABYSS_RC_DESCRIPTION
+            VALUE "FileVersion",      ABYSS_VERSION_STR
+            VALUE "InternalName",     ABYSS_RC_NAME
+            VALUE "LegalCopyright",   "abyssport contributors, GPL-2.0"
+            VALUE "OriginalFilename", ABYSS_RC_FILE
+            VALUE "ProductName",      "abyssport"
+            VALUE "ProductVersion",   ABYSS_VERSION_STR
+            VALUE "Comments",         "https://github.com/SickSartori/abyssport"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

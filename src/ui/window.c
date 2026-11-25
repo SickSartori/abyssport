@@ -1045,7 +1045,12 @@ void window_run(void *(*fn)(void *), void *arg) {
 	}
 	SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	{ extern void *gfx_gpu_create_device(void); gpu = gfx_gpu_create_device(); }
-	if (gpu) SDL_ClaimWindowForGPUDevice(gpu, win);
+	if (gpu) {
+		/* a window started minimised (a shortcut set so) has no size and cannot be claimed: the game then drew nothing
+		 * and stopped as its menu was made. The window is shown first. */
+		if (SDL_GetWindowFlags(win) & SDL_WINDOW_MINIMIZED) { SDL_RestoreWindow(win); SDL_SyncWindow(win); }
+		if (!SDL_ClaimWindowForGPUDevice(gpu, win)) fprintf(stderr, "window: not claimed for the GPU device (%s)\n", SDL_GetError());
+	}
 	if (gpu) {
 		/* the swapchain's present mode. On Vulkan, mailbox where the display has it: with vsync (fifo) this loop's submit
 		 * waits for the swapchain image on the GPU's one queue, and every scene the game submits after it waits out the
@@ -1077,7 +1082,12 @@ void window_run(void *(*fn)(void *), void *arg) {
 	{ char b[16]; settings_str("aspect", "fit", b, sizeof b);
 	  aspect_mode = !strcmp(b, "stretch") ? ASPECT_STRETCH : !strcmp(b, "fill") ? ASPECT_FILL : ASPECT_FIT; }   /* window_set_aspect also saves: read it in directly instead, nothing changed yet */
 	if (settings_int("fullscreen", 0)) SDL_SetWindowFullscreen(win, true);
-	if (gpu) overlay_init(gpu, win, SDL_GetGPUSwapchainTextureFormat(gpu, win));
+	if (gpu) {
+		/* without a swapchain format (the window was not claimed) the menu's renderer would stop the program */
+		SDL_GPUTextureFormat fmt = SDL_GetGPUSwapchainTextureFormat(gpu, win);
+		if (fmt != SDL_GPU_TEXTUREFORMAT_INVALID) overlay_init(gpu, win, fmt);
+		else fprintf(stderr, "window: no swapchain format (%s): no in-game menu\n", SDL_GetError());
+	}
 	SDL_Gamepad *pad = 0;
 	int pad_back = 0, pad_start = 0, pad_combo_latch = 0;
 	uint64_t last_overlay_t = 0;
