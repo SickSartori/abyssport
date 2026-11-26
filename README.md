@@ -137,9 +137,13 @@ the next start, which "Back to the launcher" makes one click away.
 - **Prepare stops with an error**: check that the copy is the US release PCSA00029 or the European PCSF00012, at version 1.00, that it has
   `sce_sys/package/work.bin`, and that the firmware file is `PSVUPDAT.PUP` of system update 3.74. A second run picks
   up the files already compiled.
-- **The game crashes or stops**: what it prints goes to `abyss.log` beside its files
-  (`game\library\decrypted\PCSA00029\recomp`). Attach it to a bug report, and press F5 just before the problem if
-  you can: it writes a marker in the log.
+- **The game crashes or stops**: what it prints goes to `abyss.log`, in the `logs` folder beside the game's files
+  (`game\library\decrypted\PCSA00029\recomp\logs`); the run before stays as `abyss-previous.log`. The launcher's
+  About page opens the folder (Logs, Open the folder). Attach the log to a bug report, and press F5 just before the
+  problem if you can: it writes a marker in the log. After a crash the launcher makes `abyss-crash-report.zip` (the
+  log and a dump of the crash) and offers **Report the crash**: it opens a new GitHub issue with the crash filled in,
+  and the folder with the zip to attach. Nothing is sent by itself. The dump leaves out the paths of the files it
+  lists, but the log may hold your Windows user name in a path: look before you attach it.
 - **The game is not smooth**: choose the Original style, a lower internal resolution, or 30 frames per second.
 
 ## Building from source

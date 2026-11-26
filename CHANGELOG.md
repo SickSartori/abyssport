@@ -8,6 +8,12 @@
   administrator rights, with shortcuts and an uninstaller, and offers to start the launcher, which asks for your copy
   of the game and the firmware file and makes the game as before. Uninstalling leaves the game it made and your saved
   games in the installation folder. The installer and its uninstaller are code signed, like the launcher.
+- **Logs, as mc3port's**: `abyss.log` now goes to a `logs` folder beside the game's files, and the run before stays
+  as `abyss-previous.log` (0.1.1 overwrote it at every start). The launcher's About page opens the folder. A crash
+  writes `abyss-crash.dmp` there; when the launcher opens or the game comes back, the launcher puts the log and the
+  dump in `abyss-crash-report.zip` and offers **Report the crash** (on About, and in place of Report a problem over
+  the bar): a new GitHub issue with the version and the crash's first lines filled in, and the folder opened with the
+  zip selected. Report a problem fills in the version too. RecompLauncher's log folder is the new one.
 
 ## 0.1.1 (2026-11-25)
 
