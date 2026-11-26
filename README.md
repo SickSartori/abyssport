@@ -15,6 +15,15 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue)](#requirements)
 [![Licence](https://img.shields.io/github/license/SickSartori/abyssport)](LICENSE)
 
+[Download](https://github.com/SickSartori/abyssport/releases/latest) ·
+[How to play](#how-to-play) ·
+[Controls](#controls) ·
+[Settings](#settings) ·
+[Known issues](#known-issues) ·
+[Troubleshooting](#troubleshooting) ·
+[Changelog](CHANGELOG.md) ·
+[Support the project](#supporting-the-project)
+
 </div>
 
 The game's ARM code is recompiled ahead of time into a Windows program, with a runtime that stands in for the Vita's
@@ -202,6 +211,8 @@ for this project's latest release and tells you if there is a newer one. Setting
 from RecompLauncher, it is always off.
 
 ## Supporting the project
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-buy_me_a_coffee-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/sicksartori)
 
 abyssport is free and always will be: no paid builds, no early access, no locked features. If you enjoy it and want
 to say thanks, you can support its author on [Ko-fi](https://ko-fi.com/sicksartori). It is never needed to play, and it buys nothing: it gives more time for fixes,
