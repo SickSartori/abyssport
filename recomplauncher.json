@@ -20,7 +20,7 @@
     "timeout": 3600,
     "keeps_copy": true,
     "done": ["{install}/game/abyss.exe", "{install}/game/library/decrypted/PCSA00029/recomp/game.img"],
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "start": {
     "program": ["abyssport.exe"],
@@ -104,8 +104,8 @@
       { "path": "{local}/abyssport/library/decrypted/PCSA00029/recomp/fs/savedata0" }
     ],
     "logs": [
-      { "path": "{install}/game/library/decrypted/PCSA00029/recomp", "if": "{install}/game/library/decrypted/PCSA00029/recomp/game.img" },
-      { "path": "{local}/abyssport/library/decrypted/PCSA00029/recomp" }
+      { "path": "{install}/game/library/decrypted/PCSA00029/recomp/logs", "if": "{install}/game/library/decrypted/PCSA00029/recomp/game.img" },
+      { "path": "{local}/abyssport/library/decrypted/PCSA00029/recomp/logs" }
     ]
   },
   "actions": [

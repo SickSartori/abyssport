@@ -9,6 +9,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <timeapi.h>
+#include <dbghelp.h>   /* (its types only: MiniDumpWriteDump is loaded, below) */
 #include <string.h>
 #include "platform.h"
 #include <pthread.h>   /* (winpthreads: kernel.c names threads through it, so it has the names) */
@@ -58,12 +59,33 @@ static LONG CALLBACK on_vectored(EXCEPTION_POINTERS *ep) {
 	SetLastError(saved);
 	return EXCEPTION_CONTINUE_SEARCH;
 }
+/* The crash's dump where the launcher says (ABYSS_CRASH_DUMP, in the logs folder): every thread's registers and stack and
+ * the memory they point at, for crashes the log alone does not explain; it puts it in abyss-crash-report.zip with the log.
+ * Module paths are left out (they hold the user's name). dbghelp is loaded here, not linked: the game is linked on the
+ * player's PC (tools/build_game.py) with its own list of libraries. */
+typedef BOOL (WINAPI *MiniDumpFn)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+static void write_dump(EXCEPTION_POINTERS *ep) {
+	static volatile LONG written;
+	const wchar_t *path = _wgetenv(L"ABYSS_CRASH_DUMP");
+	if (!path || !*path || InterlockedExchange(&written, 1)) return;
+	HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
+	MiniDumpFn dump = dbghelp ? (MiniDumpFn)(void (*)(void))GetProcAddress(dbghelp, "MiniDumpWriteDump") : 0;
+	if (!dump) return;
+	HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+	if (file == INVALID_HANDLE_VALUE) return;
+	MINIDUMP_EXCEPTION_INFORMATION info = {GetCurrentThreadId(), ep, FALSE};
+	const MINIDUMP_TYPE type = (MINIDUMP_TYPE)(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpFilterModulePaths);
+	BOOL ok = dump(GetCurrentProcess(), GetCurrentProcessId(), file, type, &info, 0, 0);
+	CloseHandle(file);
+	fprintf(stderr, ok ? "crash dump written\n" : "crash dump failed\n");
+}
 static LONG WINAPI on_unhandled(EXCEPTION_POINTERS *ep) {
 	DWORD code = ep->ExceptionRecord->ExceptionCode;
 	void *addr = code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2 ? (void *)ep->ExceptionRecord->ExceptionInformation[1] : ep->ExceptionRecord->ExceptionAddress;
 	const char *what = code == EXCEPTION_ACCESS_VIOLATION ? "access violation" : code == EXCEPTION_ILLEGAL_INSTRUCTION ? "illegal instruction" :
 	                   code == EXCEPTION_STACK_OVERFLOW ? "stack overflow" : code == EXCEPTION_INT_DIVIDE_BY_ZERO ? "integer divide by zero" : "unhandled exception";
 	if (crash_fn) crash_fn(what, addr);
+	write_dump(ep);
 	return EXCEPTION_CONTINUE_SEARCH;   /* then the default: Windows Error Reporting, or the debugger */
 }
 static void install(void) {

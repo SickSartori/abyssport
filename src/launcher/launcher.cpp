@@ -55,6 +55,7 @@
 #include "third_party/stb/stb_image.h"   // the runtime's (src/media/jpeg.c): PNG and JPEG, from memory only
 #include "launcher_game.h"
 #endif
+#include "crash_report.h"
 #include "game_texts.h"
 #include "update_check.h"
 #ifndef ABYSS_LAUNCHER_IN_GAME
@@ -93,7 +94,7 @@ struct Texts {
     const char *controls_lead, *tab_keys, *tab_mouse, *tab_how;
     const char *press_key, *default_keys, *none;
     const char *input_mode, *input_mode_detail, *input_names[3];
-    const char *mouse_sens, *mouse_invert, *shoulders, *shoulders_detail, *shoulder_names[2], *gyro, *gyro_detail;
+    const char *mouse_sens, *mouse_invert, *shoulders, *shoulders_detail, *shoulder_names[2], *gyro, *gyro_detail, *touch_speed, *touch_speed_detail;
     const char *mouse_lead, *mouse_buttons[5];
     const char *how_lead, *how_devices[3];
     // "How to play": the scenes' names, and what each says for keyboard and mouse, a DualSense, an Xbox controller.
@@ -118,6 +119,8 @@ struct Texts {
     // the update check (mc3port's): About's row, the notice over Play, the setting
     const char *checking, *up_to_date, *update_found, *update_sub, *update_open, *update_title, *update_lead, *update_page,
         *update_portable_note, *update_later, *check_updates, *check_updates_detail;
+    // the logs (About's row) and, after a crash, its report (crash_report.h): a row on About, the bar's link
+    const char *logs, *open_logs, *crash_heading, *crash_sub, *crash_button, *crash_link;
 };
 
 const Texts kItalian = {
@@ -148,6 +151,7 @@ const Texts kItalian = {
     "Comandi", "Automatico segue l'ultimo dispositivo usato", {"Automatico", "Controller", "Tastiera e mouse"},
     "Sensibilità del mouse", "Mouse invertito", "Tasti L e R", "Sui grilletti o sui dorsali del controller",
     {"Grilletti", "Dorsali"}, "Giroscopio del controller", "DualShock 4, DualSense e Switch Pro: inclinano come la console",
+    "Velocità del cursore touch", "Il cursore che LB e RB portano sugli schermi touch, mosso con le levette",
     "Con il mouse catturato i suoi pulsanti sono azioni. Clic per cambiare, clic destro per tornare indietro.",
     {"Pulsante sinistro", "Pulsante destro", "Pulsante centrale", "Laterale 1", "Laterale 2"},
     "Il gioco è nato per schermo touch, touch posteriore, giroscopio e fotocamera. Scegli con cosa giochi: ogni scena mostra come si fa.",
@@ -209,6 +213,8 @@ const Texts kItalian = {
     "Cerco una versione nuova...", "Questa è l'ultima versione", "È uscito abyssport %s", "Sulla pagina della release, con le novità", "Apri",
     "NUOVA VERSIONE", "È uscito abyssport %s. Le novità:", "APRI LA PAGINA", "Questa copia è portatile: scarica la nuova versione dalla pagina della release.",
     "Più tardi", "Aggiornamenti", "Cerca un nuovo abyssport su GitHub quando si apre il launcher",
+    "Log", "Apri la cartella", "Il gioco si è chiuso per un errore", "abyss-crash-report.zip è pronto da allegare a una segnalazione",
+    "Segnala", "Segnala il crash",
 };
 
 const Texts kEnglish = {
@@ -239,6 +245,7 @@ const Texts kEnglish = {
     "Controls", "Automatic follows the device used last", {"Automatic", "Controller", "Keyboard and mouse"},
     "Mouse sensitivity", "Inverted mouse", "L and R buttons", "On the controller's triggers or bumpers",
     {"Triggers", "Bumpers"}, "Controller gyroscope", "DualShock 4, DualSense and Switch Pro: they tilt like the console",
+    "Touch cursor speed", "The cursor LB and RB bring onto the touch screens, moved with the sticks",
     "With the mouse captured its buttons are actions. Click to change, right click to go back.",
     {"Left button", "Right button", "Middle button", "Side button 1", "Side button 2"},
     "The game was made for a touch screen, a rear touch pad, a gyroscope and a camera. Choose what you play with: each scene shows how.",
@@ -300,6 +307,8 @@ const Texts kEnglish = {
     "Looking for a new version...", "This is the latest version", "abyssport %s is out", "On the release page, with what is new", "Open",
     "NEW VERSION", "abyssport %s is out. What is new:", "OPEN THE PAGE", "This copy is portable: download the new version from the release page.",
     "Later", "Updates", "Look for a new abyssport on GitHub when the launcher opens",
+    "Logs", "Open the folder", "The game crashed last time", "abyss-crash-report.zip is ready to attach to a report",
+    "Report", "Report the crash",
 };
 
 std::string setting(const char* key, const char* def) {
@@ -335,6 +344,7 @@ const Texts kPortuguese = {
     "Comandos", "Automático segue o último dispositivo usado", {"Automático", "Controle", "Teclado e mouse"},
     "Sensibilidade do mouse", "Mouse invertido", "Botões L e R", "Nos gatilhos ou nos botões de ombro do controle",
     {"Gatilhos", "Ombros"}, "Giroscópio do controle", "DualShock 4, DualSense e Switch Pro: inclinam como o console",
+    "Velocidade do cursor touch", "O cursor que LB e RB levam às telas touch, movido com os analógicos",
     "Com o mouse capturado, seus botões são ações. Clique para alterar, clique direito para voltar.",
     {"Botão esquerdo", "Botão direito", "Botão do meio", "Lateral 1", "Lateral 2"},
     "O jogo foi feito para tela de toque, touch traseiro, giroscópio e câmera. Escolha com o que você joga: cada cena mostra como.",
@@ -396,6 +406,8 @@ const Texts kPortuguese = {
     "Procurando uma versão nova...", "Esta é a versão mais recente", "Saiu o abyssport %s", "Na página da versão, com as novidades", "Abrir",
     "NOVA VERSÃO", "Saiu o abyssport %s. Novidades:", "ABRIR A PÁGINA", "Esta cópia é portátil: baixe a nova versão na página da versão.",
     "Mais tarde", "Atualizações", "Procurar um novo abyssport no GitHub ao abrir o launcher",
+    "Logs", "Abrir a pasta", "O jogo travou da última vez", "abyss-crash-report.zip está pronto para anexar a um relato",
+    "Relatar", "Relatar o travamento",
 };
 
 const Texts kSpanish = {
@@ -426,6 +438,7 @@ const Texts kSpanish = {
     "Controles", "Automático sigue el último dispositivo usado", {"Automático", "Mando", "Teclado y ratón"},
     "Sensibilidad del ratón", "Ratón invertido", "Botones L y R", "En los gatillos o en los botones superiores del mando",
     {"Gatillos", "Superiores"}, "Giroscopio del mando", "DualShock 4, DualSense y Switch Pro: se inclinan como la consola",
+    "Velocidad del cursor táctil", "El cursor que LB y RB llevan a las pantallas táctiles, movido con los joysticks",
     "Con el ratón capturado sus botones son acciones. Clic para cambiar, clic derecho para volver.",
     {"Botón izquierdo", "Botón derecho", "Botón central", "Lateral 1", "Lateral 2"},
     "El juego se hizo para pantalla táctil, panel táctil trasero, giroscopio y cámara. Elige con qué juegas: cada escena muestra cómo.",
@@ -487,6 +500,8 @@ const Texts kSpanish = {
     "Buscando una versión nueva...", "Es la última versión", "Ha salido abyssport %s", "En la página de la versión, con las novedades", "Abrir",
     "NUEVA VERSIÓN", "Ha salido abyssport %s. Novedades:", "ABRIR LA PÁGINA", "Esta copia es portátil: descarga la nueva versión de la página de la versión.",
     "Más tarde", "Actualizaciones", "Buscar un abyssport nuevo en GitHub al abrir el launcher",
+    "Registros", "Abrir la carpeta", "El juego se cerró por un error la última vez", "abyss-crash-report.zip está listo para adjuntar a un informe",
+    "Informar", "Informar del fallo",
 };
 
 // The launcher's language: the setting, else Windows' (Italian, Portuguese, Spanish, else English).
@@ -953,6 +968,13 @@ private:
     std::string chosen_copy_, chosen_pup_;   // UTF-8
     bool prepare_auto_ = false;              // ABYSS_LAUNCHER_PREPARE: started by a script, which waits for the end
     std::string game_version_;
+    // the logs, in the game's folder (recomplauncher.json's "logs" too); a crash's report made at this opening or return
+    fs::path logs_directory() const { return game_directory_ / "logs"; }
+    bool crash_ready_ = false;
+    std::string crash_summary_;
+    void check_crash() { if (game_ready_) crash_ready_ = crash_report::make(logs_directory(), crash_summary_) || crash_ready_; }
+    void show_log();
+    void report_problem();
     std::vector<std::string> game_languages_;   // the copy's (game_language)
     UpdateCheck updates_;
     std::thread update_thread_;
@@ -1218,6 +1240,7 @@ void Launcher::find_game() {
             break;
         }
     }
+    check_crash();
     if (game_ready_) {
         if (FILE* file = std::fopen((game_directory_ / ".." / "version").string().c_str(), "r")) {
             char line[32] = {};
@@ -1520,9 +1543,17 @@ void Launcher::start_game() {
             break;
         }
     }
-    // what the game prints goes to abyss.log in its folder, for a bug report (the last run's only)
+    // What the game prints goes to logs/abyss.log, for a bug report; the run before stays as abyss-previous.log (a run
+    // started again after a freeze), and a crash's dump goes beside them (src/platform/platform_win32.c).
+    const fs::path logs = logs_directory();
+    fs::create_directories(logs, error);
+    fs::rename(logs / "abyss.log", logs / "abyss-previous.log", error);
+    fs::remove(game_directory_ / "abyss.log", error);  // where 0.1.1 and earlier wrote it
+    crash_ready_ = false;
+    crash_summary_.clear();
+    SetEnvironmentVariableW(L"ABYSS_CRASH_DUMP", (logs / "abyss-crash.dmp").c_str());
     SECURITY_ATTRIBUTES inherit = {sizeof(inherit), nullptr, TRUE};
-    HANDLE log = CreateFileW((game_directory_ / "abyss.log").c_str(), GENERIC_WRITE, FILE_SHARE_READ, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE log = CreateFileW((logs / "abyss.log").c_str(), GENERIC_WRITE, FILE_SHARE_READ, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     std::wstring command = L"\"" + program_.wstring() + L"\" game.img 81009ffc 100000000000";
     STARTUPINFOW startup = {};
     startup.cb = sizeof(startup);
@@ -1548,6 +1579,7 @@ void Launcher::start_game() {
         done_ = true;
         return;
     }
+    check_crash();
     SDL_ShowWindow(window_);
     SDL_RaiseWindow(window_);
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
@@ -2172,6 +2204,8 @@ void Launcher::page_controls() {
         choice("shoulder_buttons", "triggers", shoulder_values, t.shoulder_names, 2);
         row(t.gyro, t.gyro_detail);
         choice("gyro", "1", off_on, no_yes, 2);
+        row(t.touch_speed, t.touch_speed_detail);
+        number("touch_cursor_speed", 1.0f, 0.3f, 3.0f, "%.2f");
         const char* layout_values[] = {"0", "1", "2"};
         row(t.layout, t.layout_detail, 400);
         choice("controller_layout", "0", layout_values, t.layout_names, 3, nullptr, 400);
@@ -2665,6 +2699,37 @@ void Launcher::page_update() {
     cursor_ += px(52);
 }
 
+// abyss.log selected in Explorer, or the report of a crash when there is a new one.
+void Launcher::show_log() {
+    std::error_code error;
+    fs::create_directories(logs_directory(), error);
+    const fs::path file = crash_ready_ ? crash_report::path_in(logs_directory()) : logs_directory() / "abyss.log";
+    const std::wstring argument = fs::exists(file, error) ? L"/select,\"" + file.wstring() + L"\"" : L"\"" + logs_directory().wstring() + L"\"";
+    ShellExecuteW(nullptr, L"open", L"explorer.exe", argument.c_str(), nullptr, SW_SHOWNORMAL);
+}
+
+// A new issue with the version, how it was started and, after a crash, the crash in a few lines; the log to attach is
+// shown too. Sending stays with the player, signed in on GitHub.
+void Launcher::report_problem() {
+    const auto encode = [](const std::string& text) {
+        std::string encoded;
+        for (const unsigned char c : text) {
+            char escape[4];
+            std::snprintf(escape, sizeof(escape), "%%%02X", c);
+            encoded += std::isalnum(c) || std::strchr("-._~", c) ? std::string(1, static_cast<char>(c)) : escape;
+        }
+        return encoded;
+    };
+    std::string body = std::string("abyssport ") + ABYSS_VERSION + (std::getenv("ABYSS_LAUNCHER_PLAY") ? ", from RecompLauncher" : "") +
+                       "\n\nWhat happened:\n\n\nPlease attach " + (crash_ready_ ? "abyss-crash-report.zip" : "abyss.log") +
+                       " (the folder has just opened).\n";
+    if (!crash_summary_.empty()) body += "\nThe crash:\n```\n" + crash_summary_ + "```\n";
+    const std::string url = "https://github.com/SickSartori/abyssport/issues/new?body=" + encode(body) +
+                            (crash_ready_ ? "&title=" + encode("The game crashed") : std::string());
+    ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    show_log();
+}
+
 void Launcher::page_about() {
     const Texts& t = T();
     title(t.about);
@@ -2688,7 +2753,11 @@ void Launcher::page_about() {
             ShellExecuteA(nullptr, "open", saves.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
         cursor_ += px(48);
+        text(body_, px(17), ImVec2(origin_.x, origin_.y + cursor_ + px(7)), kDim, t.logs);
+        if (small_button(t.open_logs, ImVec2(origin_.x + px(150), origin_.y + cursor_), "##logs")) show_log();
+        cursor_ += px(48);
     }
+    if (crash_ready_ && status(false, t.crash_heading, t.crash_sub, t.crash_button, "##crash_report")) report_problem();
     // Never needed to play, and it buys nothing (README, "Supporting the project"): a row among the others, no reminders.
     if (status(true, t.support, t.support_sub, "Ko-fi", "##kofi")) {
         ShellExecuteA(nullptr, "open", "https://ko-fi.com/sicksartori", nullptr, nullptr, SW_SHOWNORMAL);
@@ -3118,10 +3187,18 @@ void Launcher::bottom_bar(float since) {
         return b;
     };
     enum { kFlag, kMug };
-    const auto link = [&](const char* label, ImU32 colour, int icon, ImU32 fill = 0) {
+    const auto link = [&](const char* label, ImU32 colour, int icon, ImU32 fill = 0, bool pulse = false) {
         const ImVec2 size = measure(body_bold_, px(16), label);
         const float icon_width = px(26);
         const BarButton b = button(size.x + px(36) + icon_width, fill);
+        if (pulse) {  // a crash to report: an amber border and a ring that widens and fades, every 1.6 s
+            const float width = size.x + px(36) + icon_width, p = std::fmod(static_cast<float>(ImGui::GetTime()), 1.6f) / 1.6f;
+            const ImVec2 end(b.at.x + width, b.at.y + px(36));
+            list_->AddRect(b.at, end, fade(colour), px(18), 0, px(1.5f));
+            const float grow = px(10) * p;
+            const ImU32 ring = (colour & 0x00FFFFFFu) | (static_cast<ImU32>(200 * (1 - p)) << 24);
+            list_->AddRect(ImVec2(b.at.x - grow, b.at.y - grow), ImVec2(end.x + grow, end.y + grow), fade(ring), px(18) + grow, 0, px(2));
+        }
         const ImU32 ink = fade(colour);
         const float s = px(16), ix = b.at.x + px(16), cy = b.at.y + px(18);
         if (icon == kFlag) {  // a flag on its pole
@@ -3142,9 +3219,7 @@ void Launcher::bottom_bar(float since) {
         text(body_bold_, px(16), ImVec2(b.at.x + px(18) + icon_width, b.at.y + (px(36) - size.y) / 2), ink, label);
         return b.clicked;
     };
-    if (link(t.report, kInk, kFlag)) {
-        ShellExecuteA(nullptr, "open", "https://github.com/SickSartori/abyssport/issues/new", nullptr, nullptr, SW_SHOWNORMAL);
-    }
+    if (crash_ready_ ? link(t.crash_link, kAmber, kFlag, 0, true) : link(t.report, kInk, kFlag)) report_problem();
     if (link(t.support, IM_COL32(255, 255, 255, 255), kMug, IM_COL32(255, 94, 91, 255))) {  // Ko-fi's colour
         ShellExecuteA(nullptr, "open", "https://ko-fi.com/sicksartori", nullptr, nullptr, SW_SHOWNORMAL);
     }
