@@ -15,6 +15,8 @@
   the bar): a new GitHub issue with the version and the crash's first lines filled in, and the folder opened with the
   zip selected. Report a problem fills in the version too. RecompLauncher's log folder is the new one. Report the
   crash stands out: an amber border and a ring that widens and fades every second and a half.
+- **Touch cursor speed** in Controls (Mouse and controller), also in the in-game menu: how fast the sticks move
+  the cursor LB and RB bring onto the touch screens, from 0.30 to 3 times the speed it had (1, the default).
 
 ## 0.1.1 (2026-11-25)
 

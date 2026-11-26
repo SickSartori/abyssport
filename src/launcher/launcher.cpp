@@ -94,7 +94,7 @@ struct Texts {
     const char *controls_lead, *tab_keys, *tab_mouse, *tab_how;
     const char *press_key, *default_keys, *none;
     const char *input_mode, *input_mode_detail, *input_names[3];
-    const char *mouse_sens, *mouse_invert, *shoulders, *shoulders_detail, *shoulder_names[2], *gyro, *gyro_detail;
+    const char *mouse_sens, *mouse_invert, *shoulders, *shoulders_detail, *shoulder_names[2], *gyro, *gyro_detail, *touch_speed, *touch_speed_detail;
     const char *mouse_lead, *mouse_buttons[5];
     const char *how_lead, *how_devices[3];
     // "How to play": the scenes' names, and what each says for keyboard and mouse, a DualSense, an Xbox controller.
@@ -151,6 +151,7 @@ const Texts kItalian = {
     "Comandi", "Automatico segue l'ultimo dispositivo usato", {"Automatico", "Controller", "Tastiera e mouse"},
     "Sensibilità del mouse", "Mouse invertito", "Tasti L e R", "Sui grilletti o sui dorsali del controller",
     {"Grilletti", "Dorsali"}, "Giroscopio del controller", "DualShock 4, DualSense e Switch Pro: inclinano come la console",
+    "Velocità del cursore touch", "Il cursore che LB e RB portano sugli schermi touch, mosso con le levette",
     "Con il mouse catturato i suoi pulsanti sono azioni. Clic per cambiare, clic destro per tornare indietro.",
     {"Pulsante sinistro", "Pulsante destro", "Pulsante centrale", "Laterale 1", "Laterale 2"},
     "Il gioco è nato per schermo touch, touch posteriore, giroscopio e fotocamera. Scegli con cosa giochi: ogni scena mostra come si fa.",
@@ -244,6 +245,7 @@ const Texts kEnglish = {
     "Controls", "Automatic follows the device used last", {"Automatic", "Controller", "Keyboard and mouse"},
     "Mouse sensitivity", "Inverted mouse", "L and R buttons", "On the controller's triggers or bumpers",
     {"Triggers", "Bumpers"}, "Controller gyroscope", "DualShock 4, DualSense and Switch Pro: they tilt like the console",
+    "Touch cursor speed", "The cursor LB and RB bring onto the touch screens, moved with the sticks",
     "With the mouse captured its buttons are actions. Click to change, right click to go back.",
     {"Left button", "Right button", "Middle button", "Side button 1", "Side button 2"},
     "The game was made for a touch screen, a rear touch pad, a gyroscope and a camera. Choose what you play with: each scene shows how.",
@@ -342,6 +344,7 @@ const Texts kPortuguese = {
     "Comandos", "Automático segue o último dispositivo usado", {"Automático", "Controle", "Teclado e mouse"},
     "Sensibilidade do mouse", "Mouse invertido", "Botões L e R", "Nos gatilhos ou nos botões de ombro do controle",
     {"Gatilhos", "Ombros"}, "Giroscópio do controle", "DualShock 4, DualSense e Switch Pro: inclinam como o console",
+    "Velocidade do cursor touch", "O cursor que LB e RB levam às telas touch, movido com os analógicos",
     "Com o mouse capturado, seus botões são ações. Clique para alterar, clique direito para voltar.",
     {"Botão esquerdo", "Botão direito", "Botão do meio", "Lateral 1", "Lateral 2"},
     "O jogo foi feito para tela de toque, touch traseiro, giroscópio e câmera. Escolha com o que você joga: cada cena mostra como.",
@@ -435,6 +438,7 @@ const Texts kSpanish = {
     "Controles", "Automático sigue el último dispositivo usado", {"Automático", "Mando", "Teclado y ratón"},
     "Sensibilidad del ratón", "Ratón invertido", "Botones L y R", "En los gatillos o en los botones superiores del mando",
     {"Gatillos", "Superiores"}, "Giroscopio del mando", "DualShock 4, DualSense y Switch Pro: se inclinan como la consola",
+    "Velocidad del cursor táctil", "El cursor que LB y RB llevan a las pantallas táctiles, movido con los joysticks",
     "Con el ratón capturado sus botones son acciones. Clic para cambiar, clic derecho para volver.",
     {"Botón izquierdo", "Botón derecho", "Botón central", "Lateral 1", "Lateral 2"},
     "El juego se hizo para pantalla táctil, panel táctil trasero, giroscopio y cámara. Elige con qué juegas: cada escena muestra cómo.",
@@ -2200,6 +2204,8 @@ void Launcher::page_controls() {
         choice("shoulder_buttons", "triggers", shoulder_values, t.shoulder_names, 2);
         row(t.gyro, t.gyro_detail);
         choice("gyro", "1", off_on, no_yes, 2);
+        row(t.touch_speed, t.touch_speed_detail);
+        number("touch_cursor_speed", 1.0f, 0.3f, 3.0f, "%.2f");
         const char* layout_values[] = {"0", "1", "2"};
         row(t.layout, t.layout_detail, 400);
         choice("controller_layout", "0", layout_values, t.layout_names, 3, nullptr, 400);
