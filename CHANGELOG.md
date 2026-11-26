@@ -13,7 +13,8 @@
   writes `abyss-crash.dmp` there; when the launcher opens or the game comes back, the launcher puts the log and the
   dump in `abyss-crash-report.zip` and offers **Report the crash** (on About, and in place of Report a problem over
   the bar): a new GitHub issue with the version and the crash's first lines filled in, and the folder opened with the
-  zip selected. Report a problem fills in the version too. RecompLauncher's log folder is the new one.
+  zip selected. Report a problem fills in the version too. RecompLauncher's log folder is the new one. Report the
+  crash stands out: an amber border and a ring that widens and fades every second and a half.
 
 ## 0.1.1 (2026-11-25)
 
